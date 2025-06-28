@@ -1,5 +1,8 @@
 pluginManagement {
     repositories {
+        maven {
+            url = uri("https://s01.oss.sonatype.org/content/groups/public")
+        }
         google {
             content {
                 includeGroupByRegex("com\\.android.*")

@@ -1,3 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <dimen name="fab_margin">16dp</dimen>
+    <!-- Text组件尺寸 -->
+    <dimen name="title_text_width">83dp</dimen>
+    <dimen name="title_text_height">27dp</dimen>
+    <dimen name="title_text_size">20sp</dimen>
+
+    <!-- SVG精确尺寸 -->
+    <dimen name="vector_icon_width">38.43dp</dimen>
+    <dimen name="vector_icon_height">32.88dp</dimen>
+
+    <!-- SVG原始viewBox尺寸 -->
+    <dimen name="svg_viewport_width">43</dimen>
+    <dimen name="svg_viewport_height">38</dimen>
 </resources>

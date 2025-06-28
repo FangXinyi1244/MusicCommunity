@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 阴影层 (Drop shadow: X=0, Y=4, Blur=4, #000000 6%) -->
+    <item android:top="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#0F000000" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+
+    <!-- 主容器背景层 -->
+    <item android:bottom="4dp">
+        <shape android:shape="rectangle">
+            <!-- 颜色: #3325CD with 90% opacity -->
+            <solid android:color="#E53325CD" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+
+</layer-list>
