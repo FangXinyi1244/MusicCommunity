@@ -47,11 +47,43 @@ public class MusicManager {
         Log.d(TAG, "已更新播放列表，共 " + currentPlaylist.size() + " 首歌曲");
     }
 
-    // 添加歌曲到播放列表
+    /**
+     * 查找音乐在播放列表中的索引
+     * 使用音乐URL作为唯一标识符进行比较
+     */
+    private int findMusicIndex(MusicInfo musicInfo) {
+        if (musicInfo == null || musicInfo.getMusicUrl() == null) {
+            return -1;
+        }
+
+        for (int i = 0; i < currentPlaylist.size(); i++) {
+            MusicInfo music = currentPlaylist.get(i);
+            if (music != null && music.getMusicUrl() != null &&
+                    music.getMusicUrl().equals(musicInfo.getMusicUrl())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 添加歌曲到播放列表（修正版本）
+     * 如果歌曲已存在，则将其移动到列表末尾
+     * 如果歌曲不存在，则直接添加到列表末尾
+     */
     public void addToPlaylist(MusicInfo musicInfo) {
-        if (musicInfo != null) {
+        if (musicInfo == null) {
+            Log.e(TAG, "addToPlaylist: musicInfo为null");
+            return;
+        }
+
+        // 检查歌曲是否已经在播放列表中
+        int existingIndex = findMusicIndex(musicInfo);
+
+        if (existingIndex == -1){
+            // 如果歌曲不存在，直接添加到末尾
             currentPlaylist.add(musicInfo);
-            Log.d(TAG, "已添加歌曲：" + musicInfo.getMusicName());
+            Log.d(TAG, "添加新歌曲到末尾: " + musicInfo.getMusicName());
         }
     }
 
@@ -66,14 +98,7 @@ public class MusicManager {
         }
 
         // 检查新歌曲是否已经在播放列表中
-        int existingIndex = -1;
-        for (int i = 0; i < currentPlaylist.size(); i++) {
-            MusicInfo music = currentPlaylist.get(i);
-            if (music.getMusicUrl().equals(newMusic.getMusicUrl())) {
-                existingIndex = i;
-                break;
-            }
-        }
+        int existingIndex = findMusicIndex(newMusic);
 
         if (existingIndex != -1) {
             // 如果歌曲已存在，将其移到开头
@@ -91,6 +116,8 @@ public class MusicManager {
 
         Log.d(TAG, "播放列表重新排列完成，当前播放: " + newMusic.getMusicName() + "，列表总数: " + currentPlaylist.size());
     }
+
+
 
     // 清空播放列表
     public void clearPlaylist() {

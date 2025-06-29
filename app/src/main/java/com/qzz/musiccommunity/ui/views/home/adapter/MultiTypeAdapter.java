@@ -147,7 +147,7 @@ public class MultiTypeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
             switch (holder.getItemViewType()) {
                 case ListItem.TYPE_BANNER:
                     if (holder instanceof BannerViewHolder && item instanceof BannerItem) {
-                        ((BannerViewHolder) holder).bind((BannerItem) item);
+                        ((BannerViewHolder) holder).bind((BannerItem) item, musicItemClickListener);
                     }
                     break;
 
@@ -159,13 +159,13 @@ public class MultiTypeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
 
                 case ListItem.TYPE_ONE_COLUMN:
                     if (holder instanceof OneColumnViewHolder && item instanceof OneColumnItem) {
-                        ((OneColumnViewHolder) holder).bind((OneColumnItem) item);
+                        ((OneColumnViewHolder) holder).bind((OneColumnItem) item, musicItemClickListener);
                     }
                     break;
 
                 case ListItem.TYPE_TWO_COLUMN:
                     if (holder instanceof TwoColumnViewHolder && item instanceof TwoColumnItem) {
-                        ((TwoColumnViewHolder) holder).bind((TwoColumnItem) item);
+                        ((TwoColumnViewHolder) holder).bind((TwoColumnItem) item, musicItemClickListener);
                     }
                     break;
 

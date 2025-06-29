@@ -44,6 +44,9 @@
     <color name="white">#FFFFFFFF</color>
     <color name="white_70">#B3FFFFFF</color>
     <color name="black">#FF000000</color>
-    <color name="transparent">#00000000</color>
+
+    <!-- 点赞按钮颜色 -->
+    <color name="like_color_active">#FF4081</color>
+    <color name="like_color_inactive">#80FFFFFF</color>
 
 </resources>

@@ -18,9 +18,9 @@
         android:background="?android:attr/selectableItemBackgroundBorderless"
         android:padding="12dp"
         android:src="@drawable/ic_close"
-        android:tint="@color/white"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@color/white" />
 
     <!-- ViewPager2 用于切换专辑图片和歌词 -->
     <androidx.viewpager2.widget.ViewPager2
@@ -31,52 +31,10 @@
         android:layout_marginTop="64dp"
         android:layout_marginEnd="32dp"
         android:layout_marginBottom="32dp"
-        app:layout_constraintBottom_toTopOf="@+id/songInfoContainer"
+        app:layout_constraintBottom_toTopOf="@+id/controlContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- 歌曲信息容器 -->
-    <LinearLayout
-        android:id="@+id/songInfoContainer"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:layout_marginBottom="24dp"
-        android:gravity="center"
-        android:orientation="vertical"
-        app:layout_constraintBottom_toTopOf="@+id/controlContainer"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
-
-        <!-- 歌曲名称 -->
-        <TextView
-            android:id="@+id/tvSongName"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:ellipsize="marquee"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:marqueeRepeatLimit="marquee_forever"
-            android:scrollHorizontally="true"
-            android:singleLine="true"
-            android:text="歌曲名称"
-            android:textColor="@color/white"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <!-- 歌手名称 -->
-        <TextView
-            android:id="@+id/tvArtistName"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="歌手名称"
-            android:textColor="@color/white_70"
-            android:textSize="16sp" />
-
-    </LinearLayout>
 
     <!-- 播放控制容器 -->
     <LinearLayout
@@ -91,10 +49,74 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="38dp">
+
+            <!-- 歌曲名称 -->
+            <TextView
+                android:id="@+id/tvSongName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="marquee"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                android:singleLine="true"
+                android:text="歌曲名称"
+                android:textSize="16sp"
+                android:textAlignment="center"
+                android:gravity="center"
+                android:letterSpacing="0"
+                android:lineSpacingMultiplier="1.0"
+                android:textFontWeight="380"
+                android:fontFamily="@font/mi_sans_vf"
+                android:textStyle="normal"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"/>
+
+            <!-- 歌手名称 -->
+            <TextView
+                android:id="@+id/tvArtistName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="歌手名称"
+                android:textSize="12sp"
+                android:textAlignment="center"
+                android:gravity="center"
+                android:letterSpacing="0"
+                android:lineSpacingMultiplier="1.0"
+                android:textFontWeight="330"
+                android:fontFamily="@font/mi_sans_vf"
+                android:textStyle="normal"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="@+id/tvSongName"
+                app:layout_constraintEnd_toEndOf="@+id/tvSongName"/>
+
+
+            <!-- 点赞按钮 -->
+            <ImageView
+                android:id="@+id/btnLike"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:padding="4dp"
+                android:src="@drawable/ic_favorite_border"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:clickable="true"
+                app:tint="@color/white_70"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"/>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
         <!-- 进度条容器 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:layout_marginBottom="24dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
@@ -147,7 +169,7 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="12dp"
                 android:src="@drawable/ic_repeat"
-                android:tint="@color/white_70" />
+                app:tint="@color/white_70" />
 
             <!-- 上一曲 -->
             <ImageView
@@ -158,7 +180,7 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="16dp"
                 android:src="@drawable/ic_skip_previous"
-                android:tint="@color/white" />
+                app:tint="@color/white" />
 
             <!-- 播放/暂停 -->
             <ImageView
@@ -170,7 +192,7 @@
                 android:background="@drawable/bg_play_button"
                 android:padding="20dp"
                 android:src="@drawable/ic_play"
-                android:tint="@color/white" />
+                app:tint="@color/white" />
 
             <!-- 下一曲 -->
             <ImageView
@@ -181,7 +203,7 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="16dp"
                 android:src="@drawable/ic_skip_next"
-                android:tint="@color/white" />
+                app:tint="@color/white" />
 
             <!-- 歌曲列表 -->
             <ImageView
@@ -191,31 +213,10 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="12dp"
                 android:src="@drawable/ic_playlist"
-                android:tint="@color/white_70" />
-
-        </LinearLayout>
-
-        <!-- 底部功能按钮 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:gravity="center"
-            android:orientation="horizontal">
-
-            <!-- 点赞按钮 -->
-            <ImageView
-                android:id="@+id/btnLike"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:padding="12dp"
-                android:src="@drawable/ic_favorite_border"
-                android:tint="@color/white_70" />
+                app:tint="@color/white_70" />
 
         </LinearLayout>
 
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
-

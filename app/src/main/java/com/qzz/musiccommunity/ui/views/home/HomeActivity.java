@@ -826,10 +826,16 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     public void onPlayButtonClick(MusicInfo musicInfo, int position) {
         // 处理播放按钮点击事件，启动MusicPlayerActivity
         musicInfo.printInfo();
-        Log.d(TAG, "播放按钮点击: " + musicInfo.getMusicName() + ", 位置: " + position);
+        Log.d(TAG, "播放添加按钮点击: " + musicInfo.getMusicName() + ", 位置: " + position);
+
 
         // 启动MusicPlayerActivity并传递当前音乐信息
-        startMusicPlayerActivityWithMusic(musicInfo);
+//        startMusicPlayerActivityWithMusic(musicInfo);
+        MusicManager musicManager = MusicManager.getInstance();
+        musicManager.addToPlaylist(musicInfo);
+
+        Toast.makeText(this, musicInfo.getMusicName()+"已添加到播放列表", Toast.LENGTH_SHORT).show();
+
     }
 
     @Override
@@ -863,12 +869,5 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         Log.d(TAG, "已启动MusicPlayerActivity，传递音乐: " + musicInfo.getMusicName());
     }
 
-    /**
-     * 简化版本 - 只启动Activity不传递参数（用于从播放列表恢复播放）
-     */
-    private void startMusicPlayerActivity() {
-        Intent intent = new Intent(this, MusicPlayerActivity.class);
-        startActivity(intent);
-    }
 
 }

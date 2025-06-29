@@ -1,10 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- 专辑封面 -->
+    <!-- 专辑封面 - 不再需要遮罩层 -->
     <ImageView
         android:id="@+id/ivAlbumArt"
         android:layout_width="0dp"
@@ -18,16 +18,6 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- 圆形遮罩层 -->
-    <View
-        android:id="@+id/albumArtMask"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="@drawable/circle_mask"
-        app:layout_constraintBottom_toBottomOf="@+id/ivAlbumArt"
-        app:layout_constraintEnd_toEndOf="@+id/ivAlbumArt"
-        app:layout_constraintStart_toStartOf="@+id/ivAlbumArt"
-        app:layout_constraintTop_toTopOf="@+id/ivAlbumArt" />
-
 </androidx.constraintlayout.widget.ConstraintLayout>
+
 

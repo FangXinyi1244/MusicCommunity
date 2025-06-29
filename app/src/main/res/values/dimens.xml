@@ -17,4 +17,7 @@
 
     <!-- 横向列表项间距 -->
     <dimen name="item_horizontal_margin">8dp</dimen>
+
+<!--    字体尺寸-->
+    <dimen name="xlarge_32">32dp</dimen>
 </resources>

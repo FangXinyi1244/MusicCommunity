@@ -14,4 +14,9 @@
         android:fontStyle="normal"
         android:fontWeight="330"
         android:font="@font/mi_sans_regular" />
+
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="305"
+        android:font="@font/mi_sans_regular" />
 </font-family>

@@ -34,6 +34,7 @@ import com.bumptech.glide.request.transition.Transition;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.model.TwoColumnItem;
 import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 
 public class TwoColumnViewHolder extends RecyclerView.ViewHolder {
     private static final String TAG = "TwoColumnViewHolder";
@@ -48,6 +49,9 @@ public class TwoColumnViewHolder extends RecyclerView.ViewHolder {
     // 右侧子View
     private TextView rightImageLeftContent;
     private ImageView rightImageRightContent;
+
+    // 添加监听器接口引用
+    private OnMusicItemClickListener listener;
 
     public TwoColumnViewHolder(@NonNull View itemView) {
         super(itemView);
@@ -117,15 +121,15 @@ public class TwoColumnViewHolder extends RecyclerView.ViewHolder {
         Log.d(TAG, "rightImageRightContent: " + (rightImageRightContent != null ? "已找到" : "未找到"));
     }
 
-    public void bind(TwoColumnItem item) {
+    public void bind(TwoColumnItem item, OnMusicItemClickListener listener) {
+        this.listener = listener; // 保存监听器引用
+
         if (item == null) {
             Log.w(TAG, "TwoColumnItem为空，无法绑定数据");
             clearAllContent();
             return;
         }
-
         try {
-
             // 根据音乐数据数量进行不同处理
             if (item.getMusicList() != null && item.getMusicList().size() >= 2) {
                 bindTwoMusicItems(item.getMusicList().get(0), item.getMusicList().get(1));
@@ -134,7 +138,6 @@ public class TwoColumnViewHolder extends RecyclerView.ViewHolder {
             } else {
                 bindNoMusicItems();
             }
-
         } catch (Exception e) {
             Log.e(TAG, "绑定TwoColumnItem数据时发生错误", e);
             clearAllContent();
@@ -200,35 +203,43 @@ public class TwoColumnViewHolder extends RecyclerView.ViewHolder {
             clearLeftView();
             return;
         }
-
         try {
             // 设置音乐名称
             if (leftImageLeftContent != null) {
                 String musicName = music.getMusicName();
                 leftImageLeftContent.setText(musicName != null ? musicName : "未知歌曲");
             }
-
             // 使用Glide加载封面图片作为背景
             if (leftImageView != null) {
                 loadCoverAsBackground(leftImageView, music.getCoverUrl());
             }
-
             // 设置播放按钮点击事件
             if (leftImageRightContent != null) {
                 leftImageRightContent.setOnClickListener(v -> {
-                    Toast.makeText(v.getContext(),
-                            "播放: " + music.getMusicName(),
-                            Toast.LENGTH_SHORT).show();
+                    if (listener != null) {
+                        listener.onPlayButtonClick(music, 0); // 左侧位置为0
+                    } else {
+                        // 保留原有的Toast作为回退方案
+                        Toast.makeText(v.getContext(),
+                                "播放: " + music.getMusicName(),
+                                Toast.LENGTH_SHORT).show();
+                    }
                 });
             }
 
+            // 设置整体点击事件
+            if (leftImageView != null) {
+                leftImageView.setOnClickListener(v -> {
+                    if (listener != null) {
+                        listener.onItemClick(music, 0); // 左侧位置为0
+                    }
+                });
+            }
             Log.d(TAG, "成功绑定左侧音乐: " + music.getMusicName());
-
         } catch (Exception e) {
             Log.e(TAG, "绑定左侧音乐信息时发生错误", e);
         }
     }
-
     /**
      * 绑定音乐信息到右侧View
      */
@@ -237,30 +248,39 @@ public class TwoColumnViewHolder extends RecyclerView.ViewHolder {
             clearRightView();
             return;
         }
-
         try {
             // 设置音乐名称
             if (rightImageLeftContent != null) {
                 String musicName = music.getMusicName();
                 rightImageLeftContent.setText(musicName != null ? musicName : "未知歌曲");
             }
-
             // 使用Glide加载封面图片作为背景
             if (rightImageView != null) {
                 loadCoverAsBackground(rightImageView, music.getCoverUrl());
             }
-
             // 设置播放按钮点击事件
             if (rightImageRightContent != null) {
                 rightImageRightContent.setOnClickListener(v -> {
-                    Toast.makeText(v.getContext(),
-                            "播放: " + music.getMusicName(),
-                            Toast.LENGTH_SHORT).show();
+                    if (listener != null) {
+                        listener.onPlayButtonClick(music, 1); // 右侧位置为1
+                    } else {
+                        // 保留原有的Toast作为回退方案
+                        Toast.makeText(v.getContext(),
+                                "播放: " + music.getMusicName(),
+                                Toast.LENGTH_SHORT).show();
+                    }
                 });
             }
 
+            // 设置整体点击事件
+            if (rightImageView != null) {
+                rightImageView.setOnClickListener(v -> {
+                    if (listener != null) {
+                        listener.onItemClick(music, 1); // 右侧位置为1
+                    }
+                });
+            }
             Log.d(TAG, "成功绑定右侧音乐: " + music.getMusicName());
-
         } catch (Exception e) {
             Log.e(TAG, "绑定右侧音乐信息时发生错误", e);
         }

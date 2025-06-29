@@ -15,6 +15,7 @@
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
         android:background="@drawable/round_20"
+        android:clickable="true"
         android:contentDescription="Banner图片" />
 
 </androidx.cardview.widget.CardView>

@@ -22,80 +22,85 @@ import com.bumptech.glide.request.transition.Transition;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.model.OneColumnItem;
 import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 
 public class OneColumnViewHolder extends RecyclerView.ViewHolder {
     private static final String TAG = "OneColumnViewHolder";
-
-    private View musicItemLayout; // 整个音乐项布局容器
+    private View musicItemLayout;
     private TextView leftContent;
-    private ImageView rightContent; // 播放按钮
-
+    private ImageView rightContent;
+    private OnMusicItemClickListener listener; // 添加监听器接口引用
     public OneColumnViewHolder(@NonNull View itemView) {
         super(itemView);
         musicItemLayout = itemView.findViewById(R.id.oneImageView);
-
         if (musicItemLayout != null) {
             leftContent = musicItemLayout.findViewById(R.id.leftContent);
             rightContent = musicItemLayout.findViewById(R.id.rightContent);
         }
     }
+    public void bind(OneColumnItem item, OnMusicItemClickListener listener) {
+        this.listener = listener; // 保存监听器引用
 
-    public void bind(OneColumnItem item) {
         if (item == null) {
             Log.w(TAG, "OneColumnItem为空，无法绑定数据");
             clearContent();
             return;
         }
-
         try {
             // 绑定音乐数据
             if (item.getMusicList() != null && !item.getMusicList().isEmpty()) {
                 MusicInfo music = item.getMusicList().get(0);
-                bindMusicData(music);
+                bindMusicData(music, 0); // 传递位置参数
             } else {
                 clearContent();
             }
-
         } catch (Exception e) {
             Log.e(TAG, "绑定OneColumnItem数据时发生错误", e);
             clearContent();
         }
     }
-
     /**
      * 绑定音乐数据
      */
-    private void bindMusicData(MusicInfo music) {
+    private void bindMusicData(MusicInfo music, int position) {
         if (music == null) {
             clearContent();
             return;
         }
-
         try {
             // 设置音乐名称
             if (leftContent != null) {
                 String musicName = music.getMusicName();
                 leftContent.setText(musicName != null ? musicName : "未知歌曲");
             }
-
             // 加载封面图片到背景
             if (musicItemLayout != null) {
                 loadCoverAsBackground(musicItemLayout, music.getCoverUrl());
             }
-
             // 设置播放按钮点击事件
             if (rightContent != null) {
                 rightContent.setOnClickListener(v -> {
-                    Toast.makeText(itemView.getContext(),
-                            "播放: " + music.getMusicName(),
-                            Toast.LENGTH_SHORT).show();
+                    if (listener != null) {
+                        listener.onPlayButtonClick(music, position);
+                    } else {
+                        // 保留原有的Toast作为回退方案
+                        Toast.makeText(itemView.getContext(),
+                                "播放: " + music.getMusicName(),
+                                Toast.LENGTH_SHORT).show();
+                    }
                 });
             }
 
+            // 设置整体点击事件
+            itemView.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onItemClick(music, position);
+                }
+            });
             Log.d(TAG, "成功绑定音乐数据: " + music.getMusicName());
-
         } catch (Exception e) {
             Log.e(TAG, "绑定音乐数据时发生错误", e);
+            clearContent();
         }
     }
 

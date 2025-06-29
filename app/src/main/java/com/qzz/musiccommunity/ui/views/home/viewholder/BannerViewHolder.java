@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.model.BannerItem;
 import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 import com.qzz.musiccommunity.ui.views.home.adapter.ImageAdapter;
 import com.youth.banner.Banner;
 import com.youth.banner.config.IndicatorConfig;
@@ -24,6 +25,8 @@ public class BannerViewHolder extends RecyclerView.ViewHolder {
     private Banner<MusicInfo, ImageAdapter> banner;
     private ImageAdapter imageAdapter;
     private Context context;
+
+    private OnMusicItemClickListener listener;
 
     public BannerViewHolder(@NonNull View itemView) {
         super(itemView);
@@ -41,20 +44,8 @@ public class BannerViewHolder extends RecyclerView.ViewHolder {
             Log.e(TAG, "Banner view not found in layout");
             return;
         }
-
         try {
-            // 设置指示器
-            banner.setIndicator(new CircleIndicator(context))
-                    .setIndicatorGravity(IndicatorConfig.Direction.CENTER)
-                    .setIndicatorSpace(8)
-                    .setIndicatorRadius(4)
-                    .setIndicatorHeight(8);
-
-            // 设置轮播配置
-            banner.isAutoLoop(true)
-                    .setLoopTime(3000)
-                    .setScrollTime(800)
-                    .setUserInputEnabled(true);
+            // 设置指示器...
 
             // 设置Banner的点击监听器
             banner.setOnBannerListener(new OnBannerListener<MusicInfo>() {
@@ -63,12 +54,7 @@ public class BannerViewHolder extends RecyclerView.ViewHolder {
                     handleBannerClick(data, position);
                 }
             });
-
-            // 添加生命周期观察者（如果Activity/Fragment实现了LifecycleOwner）
-            if (context instanceof androidx.lifecycle.LifecycleOwner) {
-                banner.addBannerLifecycleObserver((androidx.lifecycle.LifecycleOwner) context);
-            }
-
+            // 其他配置保持不变...
         } catch (Exception e) {
             Log.e(TAG, "初始化Banner时发生错误", e);
         }
@@ -82,19 +68,16 @@ public class BannerViewHolder extends RecyclerView.ViewHolder {
             Log.w(TAG, "Banner点击事件：数据为空");
             return;
         }
-
         try {
-            // 显示点击反馈
-            Toast.makeText(context,
-                    "点击了音乐: " + (data.getMusicName() != null ? data.getMusicName() : "未知"),
-                    Toast.LENGTH_SHORT).show();
-
-            // 这里可以根据实际需求跳转到详情页或播放音乐
-            // Intent intent = new Intent(context, MusicDetailActivity.class);
-            // intent.putExtra("music_id", data.getId());
-            // intent.putExtra("music_info", data);
-            // context.startActivity(intent);
-
+            // 使用监听器回调
+            if (listener != null) {
+                listener.onItemClick(data, position);
+            } else {
+                // 保留原有的Toast作为回退方案
+                Toast.makeText(context,
+                        "点击了音乐: " + (data.getMusicName() != null ? data.getMusicName() : "未知"),
+                        Toast.LENGTH_SHORT).show();
+            }
             Log.d(TAG, "Banner点击 - 位置: " + position + ", 音乐ID: " + data.getId());
         } catch (Exception e) {
             Log.e(TAG, "处理Banner点击事件时发生错误", e);
@@ -104,7 +87,8 @@ public class BannerViewHolder extends RecyclerView.ViewHolder {
     /**
      * 绑定数据到ViewHolder
      */
-    public void bind(BannerItem item) {
+    public void bind(BannerItem item, OnMusicItemClickListener listener) {
+        this.listener = listener;
         if (banner == null) {
             Log.e(TAG, "Banner为空，无法绑定数据");
             return;

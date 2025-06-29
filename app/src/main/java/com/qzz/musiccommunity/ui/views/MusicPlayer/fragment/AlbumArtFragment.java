@@ -48,9 +48,11 @@ public class AlbumArtFragment extends Fragment {
                     .load(coverUrl)
                     .placeholder(R.drawable.default_album_art)
                     .error(R.drawable.default_album_art)
+                    .circleCrop()  // 这一行将图片裁剪为圆形
                     .into(ivAlbumArt);
         }
     }
+
 
     public void setRotationAnimation(boolean shouldRotate) {
         if (rotationAnimator == null) return;
