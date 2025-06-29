@@ -12,4 +12,9 @@
     <!-- SVG原始viewBox尺寸 -->
     <dimen name="svg_viewport_width">43</dimen>
     <dimen name="svg_viewport_height">38</dimen>
+
+    <dimen name="cover_corner_radius">20dp</dimen>
+
+    <!-- 横向列表项间距 -->
+    <dimen name="item_horizontal_margin">8dp</dimen>
 </resources>

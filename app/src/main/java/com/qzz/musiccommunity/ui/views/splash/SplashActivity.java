@@ -8,6 +8,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -37,6 +38,14 @@ public class SplashActivity extends AppCompatActivity implements TermsDialogFrag
     public void onTermsAccepted() {
         Intent intent = new Intent(this, HomeActivity.class);
         startActivity(intent);
+        finish(); // 结束当前SplashActivity
+    }
+
+    @Override
+    public void onTermsDeclined() {
+        // 用户拒绝条款，可以选择关闭应用或返回上一步
+        Toast.makeText(this, "You must accept the terms to continue.", Toast.LENGTH_SHORT).show();
+        // 这里可以选择关闭应用或返回到上一个界面
         finish(); // 结束当前SplashActivity
     }
 

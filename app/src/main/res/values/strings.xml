@@ -24,4 +24,8 @@
         欢迎使用音乐社区，我们将严格遵守相关法律和隐私政策保护您的个人隐私，请您阅读并同意《用户协议》与《隐私政策》。
     </string>
     <string name="action_settings">菜单</string>
+    <string name="search">这是个牛马</string>
+    <string name="home_title1">专属好歌</string>
+    <string name="home_title2">每日推荐</string>
+    <string name="home_title3">热门金曲</string>
 </resources>

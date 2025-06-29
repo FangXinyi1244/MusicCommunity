@@ -26,4 +26,16 @@
 
     <!-- 不同意按钮背景色 -->
     <color name="text_background_black_20">#33000000</color>
+
+<!--    banner轮播器背景色-->
+    <color name="banner_background_color">#F6F7F8</color>
+
+    <!-- 圆角背景色 -->
+    <color name="round_banner_background_color">#FFFFFF</color>
+
+    <!-- 圆角布局背景色 -->
+    <color name="round_layout_background_color">#FFFFFF</color>
+
+    <!-- 圆角布局边框颜色 -->
+    <color name="round_layout_border_color">#E7E7E7</color>
 </resources>

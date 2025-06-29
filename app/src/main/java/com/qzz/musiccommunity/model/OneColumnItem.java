@@ -1,0 +1,39 @@
+package com.qzz.musiccommunity.model;
+
+import static com.qzz.musiccommunity.model.iface.ListItem.TYPE_ONE_COLUMN;
+
+import com.qzz.musiccommunity.model.iface.ListItem;
+import com.qzz.musiccommunity.network.dto.ModuleConfig;
+import com.qzz.musiccommunity.network.dto.MusicInfo;
+
+import java.util.List;
+
+public class OneColumnItem implements ListItem {
+    private int moduleId;
+    private String title;
+    private List<MusicInfo> musicList;
+
+    public OneColumnItem(ModuleConfig moduleConfig) {
+        this.moduleId = moduleConfig.getModuleConfigId();
+        this.title = moduleConfig.getModuleName();
+        this.musicList = moduleConfig.getMusicInfoList();
+    }
+
+    @Override
+    public int getItemType() {
+        return TYPE_ONE_COLUMN;
+    }
+
+    public int getModuleId() {
+        return moduleId;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public List<MusicInfo> getMusicList() {
+        return musicList;
+    }
+}
+

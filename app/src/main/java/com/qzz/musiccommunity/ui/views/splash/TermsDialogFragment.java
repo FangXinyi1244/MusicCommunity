@@ -38,6 +38,8 @@ public class TermsDialogFragment extends DialogFragment {
 
     public interface TermsDialogListener {
         void onTermsAccepted();
+
+        void onTermsDeclined();
     }
 
     public TermsDialogFragment() {
@@ -120,6 +122,20 @@ public class TermsDialogFragment extends DialogFragment {
                     termsDialogListener.onTermsAccepted();
                 } else {
                     Log.w(TAG, "TermsDialogListener is not set, cannot notify acceptance.");
+                }
+            });
+        }
+
+        View cancelButton = view.findViewById(R.id.cancel_button);
+        if(cancelButton != null) {
+            cancelButton.setOnClickListener(v -> {
+                // 处理取消按钮点击事件
+                dismiss();
+                // 在这里添加取消操作的代码
+                if (termsDialogListener != null) {
+                    termsDialogListener.onTermsDeclined();
+                } else {
+                    Log.w(TAG, "TermsDialogListener is not set, cannot notify cancellation.");
                 }
             });
         }

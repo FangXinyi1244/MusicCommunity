@@ -10,4 +10,8 @@
         android:fontStyle="normal"
         android:fontWeight="380"
         android:font="@font/mi_sans_medium" />
+    <font
+        android:fontStyle="normal"
+        android:fontWeight="330"
+        android:font="@font/mi_sans_regular" />
 </font-family>

@@ -38,6 +38,10 @@ android {
 
 dependencies {
 
+    implementation(libs.bundles.glide)
+    annotationProcessor(libs.glide.compiler)
+    implementation(libs.bundles.retrofit)
+    implementation(libs.bundles.smartrefresh)
     implementation(libs.banner)
     implementation(libs.appcompat)
     implementation(libs.material)
