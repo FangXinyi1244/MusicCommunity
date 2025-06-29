@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- 专辑封面 -->
+    <ImageView
+        android:id="@+id/ivAlbumArt"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_margin="32dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/default_album_art"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- 圆形遮罩层 -->
+    <View
+        android:id="@+id/albumArtMask"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/circle_mask"
+        app:layout_constraintBottom_toBottomOf="@+id/ivAlbumArt"
+        app:layout_constraintEnd_toEndOf="@+id/ivAlbumArt"
+        app:layout_constraintStart_toStartOf="@+id/ivAlbumArt"
+        app:layout_constraintTop_toTopOf="@+id/ivAlbumArt" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+

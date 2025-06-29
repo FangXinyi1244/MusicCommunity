@@ -38,4 +38,12 @@
 
     <!-- 圆角布局边框颜色 -->
     <color name="round_layout_border_color">#E7E7E7</color>
+
+<!--    音乐播放界面相关-->
+    <color name="default_background">#FF424242</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="white_70">#B3FFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="transparent">#00000000</color>
+
 </resources>

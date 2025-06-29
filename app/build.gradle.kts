@@ -38,6 +38,12 @@ android {
 
 dependencies {
 
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.fragment)
+    implementation(libs.androidx.viewpager2)
+    implementation(libs.androidx.palette)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.bundles.glide)
     annotationProcessor(libs.glide.compiler)
     implementation(libs.bundles.retrofit)

@@ -1,5 +1,6 @@
 package com.qzz.musiccommunity.ui.views.home;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,6 +13,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.qzz.musiccommunity.R;
+import com.qzz.musiccommunity.instance.MusicManager;
 import com.qzz.musiccommunity.model.BannerItem;
 import com.qzz.musiccommunity.model.HorizontalCardItem;
 import com.qzz.musiccommunity.model.OneColumnItem;
@@ -24,12 +26,15 @@ import com.qzz.musiccommunity.network.dto.BaseResponse;
 import com.qzz.musiccommunity.network.dto.ModuleConfig;
 import com.qzz.musiccommunity.network.dto.MusicInfo;
 import com.qzz.musiccommunity.network.dto.PagedData;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.MusicPlayerActivity;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 import com.qzz.musiccommunity.ui.views.home.adapter.MultiTypeAdapter;
 import com.scwang.smart.refresh.layout.SmartRefreshLayout;
 import com.scwang.smart.refresh.layout.api.RefreshLayout;
 import com.scwang.smart.refresh.layout.listener.OnLoadMoreListener;
 import com.scwang.smart.refresh.layout.listener.OnRefreshListener;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,7 +42,7 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-public class HomeActivity extends AppCompatActivity {
+public class HomeActivity extends AppCompatActivity implements OnMusicItemClickListener {
 
     private static final String TAG = "HomeActivity";
 
@@ -162,8 +167,8 @@ public class HomeActivity extends AppCompatActivity {
             LinearLayoutManager layoutManager = new LinearLayoutManager(this);
             recyclerViewSwipe.setLayoutManager(layoutManager);
 
-            // 创建适配器（移除了点击监听器设置）
-            adapter = new MultiTypeAdapter(this, currentData);
+            // 创建适配器
+            adapter = new MultiTypeAdapter(this, currentData, this);
 
             recyclerViewSwipe.setAdapter(adapter);
 
@@ -815,5 +820,37 @@ public class HomeActivity extends AppCompatActivity {
     public void onBackPressed() {
         // TODO: 后期可添加退出确认逻辑
         super.onBackPressed();
+    }
+
+    @Override
+    public void onPlayButtonClick(MusicInfo musicInfo, int position) {
+        // 处理播放按钮点击事件，启动MusicPlayerActivity
+        musicInfo.printInfo();
+        Log.d(TAG, "播放按钮点击: " + musicInfo.getMusicName() + ", 位置: " + position);
+
+        // 使用MusicManager管理列表，而不是通过Intent传递
+        MusicManager musicManager = MusicManager.getInstance();
+        musicManager.collectMusicFromListItems(currentData);
+        musicManager.setCurrentPosition(position);
+
+        startMusicPlayerActivity();
+    }
+    @Override
+    public void onItemClick(MusicInfo musicInfo, int position) {
+        // 处理整个item点击事件，启动MusicPlayerActivity
+        musicInfo.printInfo();
+        Log.d(TAG, "Item点击: " + musicInfo.getMusicName() + ", 位置: " + position);
+
+        // 使用MusicManager管理列表，而不是通过Intent传递
+        MusicManager musicManager = MusicManager.getInstance();
+        musicManager.collectMusicFromListItems(currentData);
+        musicManager.setCurrentPosition(position);
+
+        startMusicPlayerActivity();
+    }
+    private void startMusicPlayerActivity() {
+        Intent intent = new Intent(this, MusicPlayerActivity.class);
+        // 不再传递整个播放列表，只需启动Activity
+        startActivity(intent);
     }
 }

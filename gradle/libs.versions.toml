@@ -15,6 +15,11 @@ retrofit = "2.9.0"
 okhttp = "4.12.0"
 gson = "2.10.1"
 glide = "4.16.0"
+androidx-core = "1.12.0"
+androidx-fragment = "1.6.2"
+androidx-viewpager2 = "1.0.0"
+androidx-palette = "1.0.0"
+androidx-lifecycle = "2.7.0"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -49,6 +54,14 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
 glide-compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref = "glide" }
 glide-okhttp3-integration = { group = "com.github.bumptech.glide", name = "okhttp3-integration", version.ref = "glide" }
+
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidx-core" }
+androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "androidx-fragment" }
+androidx-viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "androidx-viewpager2" }
+androidx-palette = { group = "androidx.palette", name = "palette", version.ref = "androidx-palette" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "androidx-lifecycle" }
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "androidx-lifecycle" }
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

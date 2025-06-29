@@ -28,6 +28,7 @@ import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,12 +37,8 @@ public class HorizontalMusicAdapter extends RecyclerView.Adapter<HorizontalMusic
     private static final String TAG = "HorizontalMusicAdapter";
 
     private List<MusicInfo> musicList;
-    private OnItemClickListener listener;
+    private OnMusicItemClickListener listener;
     private int itemMarginResId; // 使用资源ID而非具体数值
-
-    public interface OnItemClickListener {
-        void onItemClick(MusicInfo musicInfo, int position);
-    }
 
     // 构造函数改为使用资源ID
     public HorizontalMusicAdapter(List<MusicInfo> musicList, int itemMarginResId) {
@@ -54,7 +51,7 @@ public class HorizontalMusicAdapter extends RecyclerView.Adapter<HorizontalMusic
         this(musicList, R.dimen.item_horizontal_margin); // 使用默认间距资源
     }
 
-    public void setOnItemClickListener(OnItemClickListener listener) {
+    public void setOnMusicItemClickListener(OnMusicItemClickListener listener) {
         this.listener = listener;
     }
 
@@ -124,10 +121,8 @@ public class HorizontalMusicAdapter extends RecyclerView.Adapter<HorizontalMusic
                 // 设置播放按钮点击事件
                 if (rightContent != null) {
                     rightContent.setOnClickListener(v -> {
-                        if (music.getMusicName() != null) {
-                            Toast.makeText(v.getContext(),
-                                    "播放: " + music.getMusicName(),
-                                    Toast.LENGTH_SHORT).show();
+                        if (listener != null) {
+                            listener.onPlayButtonClick(music, position);
                         }
                     });
                 }

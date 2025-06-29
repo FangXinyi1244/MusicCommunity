@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.model.HorizontalCardItem;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 import com.qzz.musiccommunity.ui.views.home.adapter.HorizontalMusicAdapter;
 
 public class HorizontalCardViewHolder extends RecyclerView.ViewHolder {
@@ -19,7 +20,7 @@ public class HorizontalCardViewHolder extends RecyclerView.ViewHolder {
         horizontalRecyclerView = itemView.findViewById(R.id.horizontalRecyclerView);
     }
 
-    public void bind(HorizontalCardItem item) {
+    public void bind(HorizontalCardItem item, OnMusicItemClickListener listener) {
         // 设置横向RecyclerView
         LinearLayoutManager layoutManager = new LinearLayoutManager(
                 itemView.getContext(), LinearLayoutManager.HORIZONTAL, false);
@@ -28,6 +29,7 @@ public class HorizontalCardViewHolder extends RecyclerView.ViewHolder {
 
         // 创建适配器并设置数据
         HorizontalMusicAdapter adapter = new HorizontalMusicAdapter(item.getMusicList());
+        adapter.setOnMusicItemClickListener(listener);
         horizontalRecyclerView.setAdapter(adapter);
     }
 }

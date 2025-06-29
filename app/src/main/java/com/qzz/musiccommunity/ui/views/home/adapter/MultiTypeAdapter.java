@@ -15,6 +15,7 @@ import com.qzz.musiccommunity.model.HorizontalCardItem;
 import com.qzz.musiccommunity.model.OneColumnItem;
 import com.qzz.musiccommunity.model.TwoColumnItem;
 import com.qzz.musiccommunity.model.iface.ListItem;
+import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 import com.qzz.musiccommunity.ui.views.home.viewholder.BannerViewHolder;
 import com.qzz.musiccommunity.ui.views.home.viewholder.HorizontalCardViewHolder;
 import com.qzz.musiccommunity.ui.views.home.viewholder.OneColumnViewHolder;
@@ -29,11 +30,13 @@ public class MultiTypeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
     private List<ListItem> items;
     private Context context;
     private LayoutInflater inflater;
+    private OnMusicItemClickListener musicItemClickListener;
 
-    public MultiTypeAdapter(Context context, List<ListItem> items) {
+    public MultiTypeAdapter(Context context, List<ListItem> items, OnMusicItemClickListener listener) {
         this.context = context;
         this.items = items != null ? items : new ArrayList<>();
         this.inflater = LayoutInflater.from(context);
+        this.musicItemClickListener = listener;
     }
 
     /**
@@ -150,7 +153,7 @@ public class MultiTypeAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
 
                 case ListItem.TYPE_HORIZONTAL_CARD:
                     if (holder instanceof HorizontalCardViewHolder && item instanceof HorizontalCardItem) {
-                        ((HorizontalCardViewHolder) holder).bind((HorizontalCardItem) item);
+                        ((HorizontalCardViewHolder) holder).bind((HorizontalCardItem) item, musicItemClickListener);
                     }
                     break;
 
