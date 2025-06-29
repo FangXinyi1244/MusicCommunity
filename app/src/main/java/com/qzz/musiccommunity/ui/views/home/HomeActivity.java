@@ -828,29 +828,47 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         musicInfo.printInfo();
         Log.d(TAG, "播放按钮点击: " + musicInfo.getMusicName() + ", 位置: " + position);
 
-        // 使用MusicManager管理列表，而不是通过Intent传递
-        MusicManager musicManager = MusicManager.getInstance();
-        musicManager.collectMusicFromListItems(currentData);
-        musicManager.setCurrentPosition(position);
-
-        startMusicPlayerActivity();
+        // 启动MusicPlayerActivity并传递当前音乐信息
+        startMusicPlayerActivityWithMusic(musicInfo);
     }
+
     @Override
     public void onItemClick(MusicInfo musicInfo, int position) {
         // 处理整个item点击事件，启动MusicPlayerActivity
         musicInfo.printInfo();
         Log.d(TAG, "Item点击: " + musicInfo.getMusicName() + ", 位置: " + position);
 
-        // 使用MusicManager管理列表，而不是通过Intent传递
-        MusicManager musicManager = MusicManager.getInstance();
-        musicManager.collectMusicFromListItems(currentData);
-        musicManager.setCurrentPosition(position);
-
-        startMusicPlayerActivity();
+        // 启动MusicPlayerActivity并传递当前音乐信息
+        startMusicPlayerActivityWithMusic(musicInfo);
     }
+
+    /**
+     * 启动音乐播放页面并传递音乐信息
+     * @param musicInfo 要播放的音乐信息
+     */
+    private void startMusicPlayerActivityWithMusic(MusicInfo musicInfo) {
+        Intent intent = new Intent(this, MusicPlayerActivity.class);
+
+        // 方法1：直接通过Intent传递Parcelable对象（推荐）
+        intent.putExtra("MUSIC_INFO", musicInfo);
+
+        // 方法2：使用Bundle包装数据（如果需要传递更多参数）
+        Bundle bundle = new Bundle();
+        bundle.putParcelable("MUSIC_INFO", musicInfo);
+        bundle.putString("SOURCE_ACTIVITY", "MainActivity"); // 可选：标识来源
+        bundle.putLong("CLICK_TIME", System.currentTimeMillis()); // 可选：点击时间戳
+        intent.putExtras(bundle);
+
+        startActivity(intent);
+        Log.d(TAG, "已启动MusicPlayerActivity，传递音乐: " + musicInfo.getMusicName());
+    }
+
+    /**
+     * 简化版本 - 只启动Activity不传递参数（用于从播放列表恢复播放）
+     */
     private void startMusicPlayerActivity() {
         Intent intent = new Intent(this, MusicPlayerActivity.class);
-        // 不再传递整个播放列表，只需启动Activity
         startActivity(intent);
     }
+
 }

@@ -55,17 +55,41 @@ public class MusicManager {
         }
     }
 
-    // 添加多首歌曲到播放列表
-    public void addAllToPlaylist(List<MusicInfo> musicList) {
-        if (musicList != null && !musicList.isEmpty()) {
-            currentPlaylist.addAll(musicList);
-            Log.d(TAG, "已添加 " + musicList.size() + " 首歌曲到播放列表");
+    /**
+     * 添加新歌曲并重新排列播放列表
+     * 将新歌曲放在列表开头，原有歌曲保持相对顺序放在后面
+     */
+    public void addAndReorderPlaylist(MusicInfo newMusic) {
+        if (newMusic == null) {
+            Log.e(TAG, "addAndReorderPlaylist: newMusic为null");
+            return;
         }
-    }
 
-    // 获取当前播放列表
-    public List<MusicInfo> getPlaylist() {
-        return new ArrayList<>(currentPlaylist);
+        // 检查新歌曲是否已经在播放列表中
+        int existingIndex = -1;
+        for (int i = 0; i < currentPlaylist.size(); i++) {
+            MusicInfo music = currentPlaylist.get(i);
+            if (music.getMusicUrl().equals(newMusic.getMusicUrl())) {
+                existingIndex = i;
+                break;
+            }
+        }
+
+        if (existingIndex != -1) {
+            // 如果歌曲已存在，将其移到开头
+            currentPlaylist.remove(existingIndex);
+            currentPlaylist.add(0, newMusic);
+            Log.d(TAG, "歌曲已存在，移动到开头: " + newMusic.getMusicName());
+        } else {
+            // 如果歌曲不存在，添加到开头
+            currentPlaylist.add(0, newMusic);
+            Log.d(TAG, "添加新歌曲到开头: " + newMusic.getMusicName());
+        }
+
+        // 设置当前播放位置为0（新添加的歌曲）
+        currentPosition = 0;
+
+        Log.d(TAG, "播放列表重新排列完成，当前播放: " + newMusic.getMusicName() + "，列表总数: " + currentPlaylist.size());
     }
 
     // 清空播放列表
@@ -73,6 +97,11 @@ public class MusicManager {
         currentPlaylist.clear();
         currentPosition = 0;
         Log.d(TAG, "播放列表已清空");
+    }
+
+    // 获取当前播放列表
+    public List<MusicInfo> getPlaylist() {
+        return new ArrayList<>(currentPlaylist);
     }
 
     // 设置当前播放位置
@@ -103,7 +132,12 @@ public class MusicManager {
         return currentPlaylist.size();
     }
 
-    // 从主页的列表项收集所有音乐信息
+    // 检查播放列表是否为空
+    public boolean isPlaylistEmpty() {
+        return currentPlaylist.isEmpty();
+    }
+
+    // 从主页的列表项收集所有音乐信息（保留此方法用于批量操作）
     public void collectMusicFromListItems(List<ListItem> listItems) {
         if (listItems == null || listItems.isEmpty()) {
             Log.d(TAG, "没有可收集的音乐数据");
@@ -128,3 +162,4 @@ public class MusicManager {
         Log.d(TAG, "已从列表项收集 " + allMusic.size() + " 首歌曲");
     }
 }
+

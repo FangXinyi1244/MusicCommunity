@@ -31,7 +31,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
     private MediaPlayer mediaPlayer;
     private boolean isPrepared = false;
 
-    // 使用MusicManager代替直接维护播放列表
     private MusicManager musicManager;
 
     private OnPlaybackStateChangeListener playbackStateChangeListener;
@@ -56,7 +55,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         createNotificationChannel();
         initMediaPlayer();
 
-        // 初始化MusicManager
         musicManager = MusicManager.getInstance();
     }
 
@@ -67,6 +65,7 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // 允许服务在后台运行
         return START_STICKY;
     }
 
@@ -91,19 +90,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         mediaPlayer.setOnErrorListener(this);
     }
 
-    /**
-     * 已弃用 - 使用MusicManager代替直接设置播放列表
-     * 保留此方法用于兼容性，但内部实现已改为使用MusicManager
-     */
-    public void setPlaylist(List<MusicInfo> playlist) {
-        // 将播放列表设置到MusicManager中
-        musicManager.setPlaylist(playlist);
-        Log.d(TAG, "通过旧接口设置播放列表，已转发到MusicManager");
-    }
-
-    /**
-     * 播放指定位置的音乐
-     */
     public void playAtPosition(int position) {
         List<MusicInfo> playlist = musicManager.getPlaylist();
 
@@ -112,7 +98,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
             return;
         }
 
-        // 更新MusicManager中的当前位置
         musicManager.setCurrentPosition(position);
         MusicInfo musicInfo = playlist.get(position);
 
@@ -133,9 +118,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    /**
-     * 播放当前音乐
-     */
     public void play() {
         if (mediaPlayer != null && isPrepared) {
             mediaPlayer.start();
@@ -150,9 +132,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    /**
-     * 暂停播放
-     */
     public void pause() {
         if (mediaPlayer != null && mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
@@ -165,9 +144,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    /**
-     * 停止播放
-     */
     public void stop() {
         if (mediaPlayer != null) {
             mediaPlayer.stop();
@@ -180,30 +156,18 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    /**
-     * 检查是否正在播放
-     */
     public boolean isPlaying() {
         return mediaPlayer != null && mediaPlayer.isPlaying();
     }
 
-    /**
-     * 获取当前播放位置（毫秒）
-     */
     public int getCurrentPosition() {
         return mediaPlayer != null ? mediaPlayer.getCurrentPosition() : 0;
     }
 
-    /**
-     * 获取当前音乐总时长（毫秒）
-     */
     public int getDuration() {
         return mediaPlayer != null && isPrepared ? mediaPlayer.getDuration() : 0;
     }
 
-    /**
-     * 跳转到指定位置
-     */
     public void seekTo(int position) {
         if (mediaPlayer != null && isPrepared) {
             mediaPlayer.seekTo(position);
@@ -211,9 +175,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    /**
-     * 设置播放状态变化监听器
-     */
     public void setOnPlaybackStateChangeListener(OnPlaybackStateChangeListener listener) {
         this.playbackStateChangeListener = listener;
     }
@@ -227,25 +188,18 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
 
     @Override
     public void onCompletion(MediaPlayer mp) {
-        // 播放完成后自动播放下一首
         Log.d(TAG, "当前歌曲播放完成");
         playNext();
     }
 
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
-        // 处理播放错误
         Log.e(TAG, "播放错误: what=" + what + ", extra=" + extra);
         isPrepared = false;
-
-        // 尝试播放下一首
         playNext();
         return true;
     }
 
-    /**
-     * 播放下一首
-     */
     public void playNext() {
         List<MusicInfo> playlist = musicManager.getPlaylist();
         int currentPosition = musicManager.getCurrentPosition();
@@ -259,9 +213,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    /**
-     * 播放上一首
-     */
     public void playPrevious() {
         List<MusicInfo> playlist = musicManager.getPlaylist();
         int currentPosition = musicManager.getCurrentPosition();
@@ -275,9 +226,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    /**
-     * 创建通知
-     */
     private Notification createNotification() {
         MusicInfo currentMusic = musicManager.getCurrentMusic();
         if (currentMusic == null) {
@@ -298,9 +246,6 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
                 .build();
     }
 
-    /**
-     * 更新通知
-     */
     private void updateNotification(MusicInfo musicInfo) {
         Notification notification = createNotification();
         if (notification != null) {
@@ -321,3 +266,4 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         stopForeground(true);
     }
 }
+
