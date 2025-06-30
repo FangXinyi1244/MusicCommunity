@@ -88,7 +88,7 @@
 
                     <TextView
                         android:id="@+id/cancel_button"
-                        android:layout_width="42dp"
+                        android:layout_width="wrap_content"
                         android:layout_height="19dp"
                         android:text="@string/decline"
                         android:fontFamily="@font/mi_sans_vf"
