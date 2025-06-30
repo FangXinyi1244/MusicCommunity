@@ -183,6 +183,7 @@ public class MusicPlaylistDialog extends DialogFragment implements MusicPlaylist
     @Override
     public void onMusicItemClick(MusicInfo musicInfo, int position) {
         Log.d(TAG, "点击播放歌曲: " + musicInfo.getMusicName() + ", 位置: " + position);
+        musicManager.setCurrentPosition(position);
         if (playlistActionListener != null) {
             playlistActionListener.onPlayMusicFromPlaylist(position);
         }

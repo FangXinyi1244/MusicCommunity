@@ -28,6 +28,10 @@ public class AlbumArtFragment extends Fragment implements ColorAwareComponent {
     private boolean isDarkBackground;
 
 
+    public boolean isRotating() {
+        return isRotating;
+    }
+
     @Override
     public void updateColors(int backgroundColor, int textColor) {
         this.backgroundColor = backgroundColor;

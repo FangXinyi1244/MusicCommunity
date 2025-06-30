@@ -1,8 +1,12 @@
 package com.qzz.musiccommunity.ui.views.home;
 
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
@@ -15,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.qzz.musiccommunity.R;
+import com.qzz.musiccommunity.Service.MusicPlayerService;
 import com.qzz.musiccommunity.instance.MusicManager;
 import com.qzz.musiccommunity.model.BannerItem;
 import com.qzz.musiccommunity.model.HorizontalCardItem;
@@ -29,6 +34,7 @@ import com.qzz.musiccommunity.network.dto.ModuleConfig;
 import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.network.dto.PagedData;
 import com.qzz.musiccommunity.ui.common.BottomMusicPlayerView;
+import com.qzz.musiccommunity.ui.common.musicList.MusicPlaylistDialog;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.MusicPlayerActivity;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 import com.qzz.musiccommunity.ui.views.home.adapter.MultiTypeAdapter;
@@ -44,7 +50,7 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
-public class HomeActivity extends AppCompatActivity implements OnMusicItemClickListener {
+public class HomeActivity extends AppCompatActivity implements OnMusicItemClickListener,MusicPlaylistDialog.OnPlaylistActionListener {
 
     private static final String TAG = "HomeActivity";
 
@@ -73,6 +79,31 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     // Network call tracking
     private Call<BaseResponse<PagedData<ModuleConfig>>> currentCall;
 
+    private MusicPlayerService musicService;
+    private boolean isMusicServiceBound = false;
+
+    // 添加 ServiceConnection 对象
+    private ServiceConnection musicServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            MusicPlayerService.MusicBinder binder = (MusicPlayerService.MusicBinder) service;
+            musicService = binder.getService();
+            isMusicServiceBound = true;
+            Log.d(TAG, "已连接到音乐播放服务");
+
+            // 服务连接后更新底部播放器
+            if (bottomMusicPlayerView != null && isBottomPlayerInflated) {
+                bottomMusicPlayerView.updatePlayerView();
+            }
+        }
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            musicService = null;
+            isMusicServiceBound = false;
+            Log.d(TAG, "与音乐播放服务断开连接");
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -82,6 +113,9 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
 
         try {
             initializeComponents();
+
+            // 绑定音乐播放服务
+            bindMusicService();
 
             // 延迟加载初始数据，确保UI完全初始化
             mainHandler.postDelayed(() -> {
@@ -111,7 +145,49 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         Log.d(TAG, "onResume - 检查并更新底部播放器显示状态");
         // 修正2：从其他Activity返回时判断BottomMusicPlayerView显示
         checkAndUpdateBottomPlayerVisibility();
+
+        // 注册播放状态变化监听器
+        if (bottomMusicPlayerView != null && isBottomPlayerInflated) {
+            bottomMusicPlayerView.registerPlaybackStateChangeListener();
+            bottomMusicPlayerView.updatePlayerView();
+        }
     }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d(TAG, "onPause - 移除播放状态变化监听器");
+        // 移除播放状态变化监听器
+        if (bottomMusicPlayerView != null && isBottomPlayerInflated) {
+            bottomMusicPlayerView.unregisterPlaybackStateChangeListener();
+        }
+    }
+
+    /**
+     * 绑定音乐播放服务
+     */
+    private void bindMusicService() {
+        if (!isMusicServiceBound) {
+            Intent intent = new Intent(this, MusicPlayerService.class);
+            // 同时启动服务，确保服务不会因未启动而绑定失败
+            startService(intent);
+            boolean bound = bindService(intent, musicServiceConnection, Context.BIND_AUTO_CREATE);
+            Log.d(TAG, "尝试绑定音乐服务，结果: " + bound);
+        }
+    }
+
+    /**
+     * 解绑音乐播放服务
+     */
+    private void unbindMusicService() {
+        if (isMusicServiceBound) {
+            unbindService(musicServiceConnection);
+            isMusicServiceBound = false;
+            Log.d(TAG, "解绑音乐服务");
+        }
+    }
+
+
 
     /**
      * 初始化所有组件
@@ -648,12 +724,10 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         Log.d(TAG, "点击了音乐: " + musicInfo.getMusicName() + ", 位置: " + position);
         // 将点击的音乐添加到播放列表的开头并设置为当前播放
         MusicManager.getInstance(this).addAndReorderPlaylist(musicInfo);
+        // 使用回调方法跳转到音乐播放页面
+        openMusicPlayerActivity();
 
-        // 启动音乐播放Activity
-        Intent intent = new Intent(this, MusicPlayerActivity.class);
-        startActivity(intent);
-
-        // 修正1：添加歌时判断BottomMusicPlayerView显示
+        // 添加歌时判断BottomMusicPlayerView显示
         checkAndUpdateBottomPlayerVisibility();
     }
 
@@ -665,6 +739,40 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
 
         // 修正1：添加歌时判断BottomMusicPlayerView显示
         checkAndUpdateBottomPlayerVisibility();
+    }
+
+    /**
+     * 实现MusicPlaylistDialog.OnPlaylistActionListener接口，
+     * 以便MusicPlaylistDialog可以与Activity通信
+     */
+    @Override
+    public void onPlayMusicFromPlaylist(int position) {
+        // 从播放列表中播放指定位置的音乐
+        if (musicService != null) {
+            musicService.playAtPosition(position);
+        }
+    }
+    @Override
+    public void onPlaylistChanged() {
+        // 播放列表变化时更新UI
+        if (bottomMusicPlayerView != null) {
+            bottomMusicPlayerView.updatePlayerView();
+        }
+    }
+    @Override
+    public void onPlayModeChanged(MusicPlayerService.PlayMode playMode) {
+        // 播放模式变化时通知服务
+        if (musicService != null) {
+            musicService.setPlayMode(playMode);
+        }
+    }
+    @Override
+    public MusicPlayerService.PlayMode getCurrentPlayMode() {
+        // 获取当前播放模式
+        if (musicService != null) {
+            return musicService.getPlayMode();
+        }
+        return MusicPlayerService.PlayMode.SEQUENCE; // 默认顺序播放
     }
 
     /**
@@ -693,13 +801,10 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     private void checkAndUpdateBottomPlayerVisibility() {
         try {
             MusicManager musicManager = MusicManager.getInstance(this);
-
             // 检查播放列表是否为空
             boolean hasPlaylist = musicManager.hasPlaylist();
-
             Log.d(TAG, "检查播放器显示状态 - hasPlaylist: " + hasPlaylist +
                     ", isInflated: " + isBottomPlayerInflated);
-
             if (hasPlaylist) {
                 // 有播放列表，需要显示底部播放器
                 if (!isBottomPlayerInflated) {
@@ -711,16 +816,45 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
                     bottomMusicPlayerView.updatePlayerView();
                 }
             } else {
-                // 修正1：空列表时保持BottomMusicPlayerView不显示
+                // 空列表时隐藏BottomMusicPlayerView
                 if (isBottomPlayerInflated && bottomMusicPlayerView != null) {
                     bottomMusicPlayerView.setVisibility(View.GONE);
                 }
             }
-
         } catch (Exception e) {
             Log.e(TAG, "检查底部播放器显示状态时出错", e);
         }
     }
+
+    // 使用回调方法实现音乐播放页面跳转
+    private void openMusicPlayerActivity() {
+        // 添加防重复跳转判断
+        if (isFinishing() || isDestroyed()) {
+            Log.d(TAG, "Activity已销毁，忽略页面跳转");
+            return;
+        }
+
+        // 释放资源，避免内存泄漏
+        if (bottomMusicPlayerView != null) {
+            bottomMusicPlayerView.pauseUpdateTasks();
+        }
+
+        // 设置跳转标志
+        Intent intent = new Intent(this, MusicPlayerActivity.class);
+        // 添加标志以清除任务栈中可能存在的相同Activity实例
+        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        startActivity(intent);
+    }
+
+
+    /**
+     * 显示播放列表对话框
+     */
+    private void showPlaylistDialog() {
+        MusicPlaylistDialog playlistDialog = MusicPlaylistDialog.newInstance();
+        playlistDialog.show(getSupportFragmentManager(), "MusicPlaylistDialog");
+    }
+
 
     /**
      * inflate底部播放器ViewStub
@@ -728,12 +862,26 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     private void inflateBottomMusicPlayer() {
         try {
             if (stubBottomPlayer != null && !isBottomPlayerInflated) {
-                // inflate ViewStub
+                // inflate ViewStub，返回的是BottomMusicPlayerView实例
                 View inflatedView = stubBottomPlayer.inflate();
-                bottomMusicPlayerView = findViewById(R.id.bottom_music_player);
+                // 正确获取BottomMusicPlayerView
+                bottomMusicPlayerView = (BottomMusicPlayerView) inflatedView;
                 isBottomPlayerInflated = true;
-
                 if (bottomMusicPlayerView != null) {
+                    // 设置回调监听器 - 需要在BottomMusicPlayerView中添加此方法
+                    bottomMusicPlayerView.setOnBottomPlayerActionListener(new BottomMusicPlayerView.OnBottomPlayerActionListener() {
+                        @Override
+                        public void onBottomPlayerClick() {
+                            // 点击播放器主体时跳转到播放页面
+                            openMusicPlayerActivity();
+                        }
+                        @Override
+                        public void onPlaylistButtonClick() {
+                            // 点击播放列表按钮时显示播放列表对话框
+                            showPlaylistDialog();
+                        }
+                    });
+
                     // 更新播放器状态
                     bottomMusicPlayerView.updatePlayerView();
                     bottomMusicPlayerView.setVisibility(View.VISIBLE);

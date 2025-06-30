@@ -12,6 +12,8 @@ import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.RemoteException;
 import android.util.Log;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
@@ -43,48 +45,59 @@ import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.ColorAwareComponent;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.fragment.AlbumArtFragment;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.fragment.LyricFragment;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MusicPlayerActivity extends AppCompatActivity
         implements MusicPlayerService.OnPlaybackStateChangeListener,
         MusicPlaylistDialog.OnPlaylistActionListener {
 
     private static final String TAG = "MusicPlayerActivity";
+    private static final int RECONNECT_DELAY_MS = 200;
+    private static final int UI_REFRESH_DELAY_MS = 100;
 
+    // UI组件
     private ViewPager2 viewPager;
     private TextView tvSongName, tvArtistName, tvCurrentTime, tvTotalTime;
     private ImageView btnClose, btnPlayPause, btnPrevious, btnNext, btnPlayMode, btnPlaylist, btnLike;
     private SeekBar seekBar;
     private ConstraintLayout rootLayout;
+
+    // Service相关
     private MusicPlayerService musicService;
-    private boolean serviceBound = false;
-    private Handler handler = new Handler();
+    private volatile boolean serviceBound = false;
+    private volatile boolean isReconnecting = false;
+
+    // 线程和Handler
+    private Handler mainHandler = new Handler(Looper.getMainLooper());
+    private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Runnable updateProgressRunnable;
+
+    // 其他组件
     private MusicManager musicManager;
     private MusicPlayerService.PlayMode currentPlayMode = MusicPlayerService.PlayMode.SEQUENCE;
     private AlbumArtFragment albumArtFragment;
     private LyricFragment lyricFragment;
     private MusicPlaylistDialog currentPlaylistDialog;
 
-    // 添加点赞状态变量
+    // 状态变量
     private boolean isLiked = false;
     private ValueAnimator likeAnimator;
-    private int currentDominantColor = 0xFF424242; // 默认色
+    private int currentDominantColor = 0xFF424242;
+    private boolean isActivityVisible = false;
+    private boolean needToRefreshOnResume = false;
+    private boolean isRotationPaused = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_music_player);
 
-        // 初始化MusicManager
         musicManager = MusicManager.getInstance(this);
-
         initViews();
         setupViewPager();
         setupListeners();
 
-        // 从MusicManager获取当前播放状态和信息
         MusicInfo currentMusic = musicManager.getCurrentMusic();
         if (currentMusic != null) {
             updateSongInfo(currentMusic);
@@ -92,10 +105,324 @@ public class MusicPlayerActivity extends AppCompatActivity
             Log.d(TAG, "从MusicManager恢复播放现有音乐: " + currentMusic.getMusicName());
         } else {
             Log.e(TAG, "MusicManager中没有当前播放音乐信息，无法初始化播放器");
-            finish(); // 如果没有音乐信息，则关闭Activity
+            finish();
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG, "onResume: 活动恢复到前台");
+        isActivityVisible = true;
+
+        // 使用延迟执行确保UI完全准备好
+        mainHandler.postDelayed(this::refreshActivityState, UI_REFRESH_DELAY_MS);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d(TAG, "onPause: 活动进入后台");
+        isActivityVisible = false;
+
+        if (albumArtFragment != null) {
+            isRotationPaused = !albumArtFragment.isRotating();
+        }
+
+        stopUpdatingProgress();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        Log.d(TAG, "onStop: 活动不可见");
+        needToRefreshOnResume = true;
+    }
+
+    /**
+     * 刷新Activity状态 - 核心优化方法
+     */
+    private void refreshActivityState() {
+        if (isServiceConnectionValid()) {
+            Log.d(TAG, "服务连接有效，刷新状态");
+            refreshUIState();
+        } else {
+            Log.d(TAG, "服务连接无效，重新建立连接");
+            reconnectService();
+        }
+    }
+
+    /**
+     * 验证服务连接是否真正有效
+     * 不仅检查引用，还要验证IPC连接状态
+     */
+    private boolean isServiceConnectionValid() {
+        if (!serviceBound || musicService == null) {
+            return false;
+        }
+
+        try {
+            // 通过调用一个轻量级方法来验证IPC连接是否活跃
+            // 如果服务进程已死或连接断开，这里会抛出RemoteException
+            boolean isPlaying = musicService.isPlaying(); // 用现有的方法验证连接
+            return true;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "服务连接已断开: " + e.getMessage());
+            // 清理无效状态
+            serviceBound = false;
+            musicService = null;
+            return false;
+        }
+    }
+
+    /**
+     * 重新连接服务并刷新状态
+     */
+    private void reconnectService() {
+        if (isReconnecting) {
+            Log.d(TAG, "正在重连中，跳过此次重连请求");
+            return;
+        }
+
+        isReconnecting = true;
+
+        // 先清理旧连接
+        if (serviceBound) {
+            try {
+                unbindService(serviceConnection);
+            } catch (Exception e) {
+                Log.w(TAG, "解绑服务时出错: " + e.getMessage());
+            }
+            serviceBound = false;
+            musicService = null;
+        }
+
+        // 延迟重新绑定服务，避免频繁重连
+        mainHandler.postDelayed(() -> {
+            Log.d(TAG, "开始重新绑定服务");
+            bindMusicService();
+            needToRefreshOnResume = true;
+            isReconnecting = false;
+        }, RECONNECT_DELAY_MS);
+    }
+
+    /**
+     * 刷新UI状态 - 添加异常处理和异步执行
+     */
+    private void refreshUIState() {
+        try {
+            // 异步获取当前状态，避免阻塞主线程
+            executorService.execute(() -> {
+                try {
+                    if (!serviceBound || musicService == null) {
+                        mainHandler.post(this::handleServiceError);
+                        return;
+                    }
+
+                    // 获取服务状态
+                    boolean isPlaying = musicService.isPlaying();
+                    int playMode = musicService.getPlayMode().ordinal();
+                    MusicInfo currentMusic = musicManager.getCurrentMusic();
+
+                    // 回到主线程更新UI
+                    mainHandler.post(() -> updateUIOnMainThread(isPlaying, playMode, currentMusic));
+
+                } catch (RuntimeException e) {
+                    Log.e(TAG, "获取服务状态失败: " + e.getMessage());
+                    mainHandler.post(this::handleServiceError);
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "刷新UI状态失败: " + e.getMessage());
+            handleServiceError();
+        }
+    }
+
+    /**
+     * 在主线程更新UI
+     */
+    private void updateUIOnMainThread(boolean isPlaying, int playMode, MusicInfo currentMusic) {
+        try {
+            // 1. 刷新播放状态
+            updatePlaybackState(isPlaying);
+
+            // 2. 刷新当前歌曲信息
+            if (currentMusic != null) {
+                updateSongInfo(currentMusic);
+            }
+
+            // 3. 恢复唱片旋转状态
+            if (albumArtFragment != null) {
+                albumArtFragment.setRotationAnimation(isPlaying);
+            }
+
+            // 4. 同步播放模式
+            setPlayMode(MusicPlayerService.PlayMode.values()[playMode]);
+
+            // 5. 刷新进度条
+            updateProgress();
+
+            // 6. 启动进度更新
+            if (isPlaying) {
+                startUpdatingProgress();
+            }
+
+            Log.d(TAG, "UI状态刷新完成");
+
+        } catch (Exception e) {
+            Log.e(TAG, "更新UI时出错: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 处理服务错误
+     */
+    private void handleServiceError() {
+        Log.e(TAG, "服务连接出现错误，尝试重新连接");
+        serviceBound = false;
+        musicService = null;
+
+
+        // 延迟重连
+        mainHandler.postDelayed(this::reconnectService, RECONNECT_DELAY_MS);
+    }
+
+    /**
+     * 安全的Service方法调用包装器
+     */
+    private boolean safeServiceCall(ServiceOperation operation) {
+        if (!serviceBound || musicService == null) {
+            handleServiceError();
+            return false;
+        }
+
+        try {
+            operation.execute(musicService);
+            return true;
+        } catch (RemoteException | RuntimeException e) {
+            Log.e(TAG, "Service调用失败: " + e.getMessage());
+            handleServiceError();
+            return false;
+        }
+    }
+
+    // 定义Service操作接口
+    private interface ServiceOperation {
+        void execute(MusicPlayerService service) throws RemoteException;
+    }
+
+    // 改进的ServiceConnection，增强错误处理
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            try {
+                MusicPlayerService.MusicBinder binder = (MusicPlayerService.MusicBinder) service;
+                musicService = binder.getService();
+                serviceBound = true;
+
+                // 设置回调监听器
+                musicService.setOnPlaybackStateChangeListener(MusicPlayerActivity.this);
+                Log.d(TAG, "服务已绑定");
+
+                // 确保服务中的播放列表与MusicManager同步
+                musicService.updatePlaylist(musicManager.getPlaylist());
+                musicService.setCurrentPosition(musicManager.getCurrentPosition());
+
+                // 同步播放模式
+                currentPlayMode = musicService.getPlayMode();
+                updatePlayModeButton();
+
+                // 如果服务没有在播放，则开始播放当前音乐
+                if (!musicService.isPlaying() && musicManager.getCurrentMusic() != null) {
+                    musicService.play();
+                }
+
+                // 更新UI状态
+                updatePlaybackState(musicService.isPlaying());
+                updateProgress();
+
+                // 重置重连标志
+                isReconnecting = false;
+
+            } catch (Exception e) {
+                Log.e(TAG, "Service连接回调处理失败: " + e.getMessage());
+                handleServiceError();
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            Log.w(TAG, "服务连接意外断开");
+            serviceBound = false;
+            musicService = null;
+            needToRefreshOnResume = true;
+
+            // 如果Activity可见，尝试重连
+            if (isActivityVisible) {
+                mainHandler.postDelayed(() -> reconnectService(), RECONNECT_DELAY_MS);
+            }
+        }
+
+        @Override
+        public void onBindingDied(ComponentName name) {
+            Log.e(TAG, "服务绑定死亡");
+            serviceBound = false;
+            musicService = null;
+            if (isActivityVisible) {
+                mainHandler.postDelayed(() -> reconnectService(), RECONNECT_DELAY_MS);
+            }
+        }
+    };
+
+    // 改进后的播放控制方法
+    private void playPrevious() {
+        safeServiceCall(service -> service.playPrevious());
+    }
+
+    private void playNext() {
+        safeServiceCall(service -> service.playNext());
+    }
+
+    private void updateProgress() {
+        safeServiceCall(service -> {
+            int current = service.getCurrentPosition();
+            int duration = service.getDuration();
+            onProgressChanged(current, duration);
+        });
+    }
+
+    // 改进的进度更新机制
+    private void startUpdatingProgress() {
+        if (updateProgressRunnable == null) {
+            updateProgressRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    if (isActivityVisible && serviceBound && musicService != null) {
+                        safeServiceCall(service -> {
+                            if (service.isPlaying()) {
+                                int current = service.getCurrentPosition();
+                                int duration = service.getDuration();
+                                onProgressChanged(current, duration);
+                            }
+                        });
+                    }
+                    mainHandler.postDelayed(this, 1000);
+                }
+            };
+        }
+
+        mainHandler.removeCallbacks(updateProgressRunnable);
+        mainHandler.post(updateProgressRunnable);
+    }
+
+    private void stopUpdatingProgress() {
+        if (updateProgressRunnable != null) {
+            mainHandler.removeCallbacks(updateProgressRunnable);
+        }
+    }
+
+    // 其余方法保持不变...
     private void initViews() {
         viewPager = findViewById(R.id.viewPager);
         tvSongName = findViewById(R.id.tvSongName);
@@ -134,180 +461,110 @@ public class MusicPlayerActivity extends AppCompatActivity
 
     private void setupListeners() {
         btnClose.setOnClickListener(v -> finishWithAnimation());
+
         btnPlayPause.setOnClickListener(v -> {
-            if (serviceBound) {
-                if (musicService.isPlaying()) {
-                    musicService.pause();
+            safeServiceCall(service -> {
+                if (service.isPlaying()) {
+                    service.pause();
                 } else {
-                    musicService.play();
+                    service.play();
                 }
-            }
+            });
         });
+
         btnPrevious.setOnClickListener(v -> playPrevious());
         btnNext.setOnClickListener(v -> playNext());
         btnPlayMode.setOnClickListener(v -> switchPlayMode());
+
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser && serviceBound) {
-                    int duration = musicService.getDuration();
-                    int newPosition = (duration * progress) / 100;
-                    musicService.seekTo(newPosition);
+                if (fromUser) {
+                    safeServiceCall(service -> {
+                        int duration = service.getDuration();
+                        int newPosition = (duration * progress) / 100;
+                        service.seekTo(newPosition);
+                    });
                 }
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                // 释放滑动后，确保播放内容已更新
-                if (serviceBound) {
-                    int duration = musicService.getDuration();
+                safeServiceCall(service -> {
+                    int duration = service.getDuration();
                     int newPosition = (duration * seekBar.getProgress()) / 100;
-                    musicService.seekTo(newPosition);
+                    service.seekTo(newPosition);
                     Log.d(TAG, "拖拽进度条完成，跳转到: " + newPosition + "ms");
-                }
+                });
             }
         });
 
-        // 点赞按钮事件
         btnLike.setOnClickListener(v -> toggleLike());
-
-        // 音乐列表按钮事件
         btnPlaylist.setOnClickListener(v -> showPlaylistDialog());
     }
 
-    // 音乐列表弹窗
-    public void showPlaylistDialog() {
-        currentPlaylistDialog = MusicPlaylistDialog.newInstance();
-        currentPlaylistDialog.show(getSupportFragmentManager(), "MusicPlaylistDialog");
+    private void bindMusicService() {
+        Intent intent = new Intent(this, MusicPlayerService.class);
+        startService(intent);
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
+        Log.d(TAG, "尝试绑定音乐服务");
     }
 
-
-
-    /**
-     * 实现OnPlaylistActionListener接口 - 从播放列表播放指定歌曲
-     */
-    @Override
-    public void onPlayMusicFromPlaylist(int position) {
-        playMusicFromPlaylist(position);
-    }
-
-    /**
-     * 实现OnPlaylistActionListener接口 - 播放列表变化处理
-     */
-    @Override
-    public void onPlaylistChanged() {
-        handlePlaylistChanged();
-    }
-
-    /**
-     * 实现OnPlaylistActionListener接口 - 播放模式变化处理
-     */
-    @Override
-    public void onPlayModeChanged(MusicPlayerService.PlayMode playMode) {
-        setPlayMode(playMode);
-    }
-
-    /**
-     * 实现OnPlaybackStateChangeListener接口 - 歌曲改变
-     * 注意：这个方法接收位置参数，而不是MusicInfo对象
-     */
-    @Override
-    public void onSongChanged(int position) {
-        // 从播放列表获取相应位置的音乐信息
-        MusicInfo musicInfo = musicManager.getMusicAt(position);
-        if (musicInfo != null) {
-            // 更新当前歌曲UI
-            updateSongInfo(musicInfo);
-            // 同步MusicManager的当前位置
-            musicManager.setCurrentPosition(position);
-        } else {
-            Log.e(TAG, "onSongChanged: 位置 " + position + " 的音乐信息为null");
-        }
-    }
-
-
-    /**
-     * 实现OnPlaylistActionListener接口 - 获取当前播放模式
-     */
-    @Override
-    public MusicPlayerService.PlayMode getCurrentPlayMode() {
-        return currentPlayMode;
-    }
-
-    /**
-     * 从播放列表播放指定位置的歌曲
-     */
-    public void playMusicFromPlaylist(int position) {
-        if (!musicManager.isValidPosition(position)) {
-            Log.e(TAG, "playMusicFromPlaylist: 无效位置 " + position);
-            return;
-        }
-
-        MusicInfo musicInfo = musicManager.getMusicAt(position);
-        if (musicInfo == null) {
-            Log.e(TAG, "playMusicFromPlaylist: 位置 " + position + " 的音乐信息为null");
-            return;
-        }
-
-        Log.d(TAG, "从播放列表播放歌曲: " + musicInfo.getMusicName() + ", 位置: " + position);
-
-        // 更新MusicManager的当前位置
-        musicManager.setCurrentPosition(position);
-
-        // 更新界面
-        updateSongInfo(musicInfo);
-
-        // 通过Service播放
+    private void unbindMusicService() {
         if (serviceBound) {
-            musicService.playAtPosition(position);
+            try {
+                unbindService(serviceConnection);
+            } catch (Exception e) {
+                Log.w(TAG, "解绑服务时出错: " + e.getMessage());
+            }
+            serviceBound = false;
+            Log.d(TAG, "服务已解绑");
         }
     }
 
-    /**
-     * 处理播放列表变化
-     */
-    public void handlePlaylistChanged() {
-        Log.d(TAG, "处理播放列表变化");
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
 
-        // 如果播放列表为空，关闭Activity
-        if (musicManager.isPlaylistEmpty()) {
-            Log.d(TAG, "播放列表为空，关闭Activity");
-            finish();
-            return;
+        // 停止所有异步操作
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown();
         }
 
-        // 通知Service播放列表已更新
-        if (serviceBound) {
-            musicService.updatePlaylist(musicManager.getPlaylist());
-        }
+        // 清理Handler回调
+        mainHandler.removeCallbacks(updateProgressRunnable);
 
-        // 获取当前音乐并更新界面
-        MusicInfo currentMusic = musicManager.getCurrentMusic();
-        if (currentMusic != null) {
-            updateSongInfo(currentMusic);
-        }
+        // 解绑服务
+        unbindMusicService();
 
-        // 如果播放列表对话框还在显示，通知其更新
-        if (currentPlaylistDialog != null) {
-            currentPlaylistDialog.notifyPlaylistChanged();
-        }
+        Log.d(TAG, "Activity销毁");
     }
 
-    /**
-     * 设置播放模式
-     */
+    // 保持其他现有方法不变，只更新涉及Service调用的部分...
+    // [其余方法如updateSongInfo, extractColorFromBitmap等保持原样]
+
+    // 示例：切换播放模式的安全调用
+    private void switchPlayMode() {
+        MusicPlayerService.PlayMode[] modes = MusicPlayerService.PlayMode.values();
+        int currentIndex = -1;
+        for (int i = 0; i < modes.length; i++) {
+            if (modes[i] == currentPlayMode) {
+                currentIndex = i;
+                break;
+            }
+        }
+        int nextIndex = (currentIndex + 1) % modes.length;
+        setPlayMode(modes[nextIndex]);
+    }
+
     public void setPlayMode(MusicPlayerService.PlayMode playMode) {
         if (playMode != currentPlayMode) {
             currentPlayMode = playMode;
             updatePlayModeButton();
 
-            // 同步到Service
-            if (serviceBound) {
-                musicService.setPlayMode(playMode);
-            }
+            safeServiceCall(service -> service.setPlayMode(playMode));
 
-            // 同步到对话框
             if (currentPlaylistDialog != null) {
                 currentPlaylistDialog.updatePlayMode(playMode);
             }
@@ -316,9 +573,6 @@ public class MusicPlayerActivity extends AppCompatActivity
         }
     }
 
-    /**
-     * 更新播放模式按钮显示
-     */
     private void updatePlayModeButton() {
         switch (currentPlayMode) {
             case SEQUENCE:
@@ -333,272 +587,46 @@ public class MusicPlayerActivity extends AppCompatActivity
         }
     }
 
-    /**
-     * 更新进度
-     */
-    private void updateProgress() {
-        if (serviceBound && musicService != null) {
-            int current = musicService.getCurrentPosition();
-            int duration = musicService.getDuration();
-            onProgressChanged(current, duration);
-        }
-    }
-
-    /**
-     * 执行退出动画并关闭Activity
-     */
-    private void finishWithAnimation() {
-        // 防止重复触发
-        if (isFinishing()) {
-            return;
-        }
-
-        // 获取屏幕高度
-        int screenHeight = getResources().getDisplayMetrics().heightPixels;
-
-        // 创建动画集合
-        AnimatorSet exitAnimatorSet = new AnimatorSet();
-
-        // 1. 向下滑动动画
-        ObjectAnimator slideDown = ObjectAnimator.ofFloat(
-                rootLayout,
-                "translationY",
-                0f,
-                screenHeight
-        );
-        slideDown.setDuration(400); // 400ms动画时长
-        slideDown.setInterpolator(new AccelerateInterpolator(1.5f)); // 加速效果
-
-        // 2. 渐隐动画
-        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(
-                rootLayout,
-                "alpha",
-                1.0f,
-                0.0f
-        );
-        fadeOut.setDuration(300); // 300ms渐隐
-        fadeOut.setStartDelay(100); // 延迟100ms开始，让滑动先进行
-        fadeOut.setInterpolator(new AccelerateInterpolator());
-
-        // 3. 可选：添加缩放效果让动画更生动
-        ObjectAnimator scaleX = ObjectAnimator.ofFloat(
-                rootLayout,
-                "scaleX",
-                1.0f,
-                0.9f
-        );
-        scaleX.setDuration(400);
-        scaleX.setInterpolator(new AccelerateInterpolator());
-
-        ObjectAnimator scaleY = ObjectAnimator.ofFloat(
-                rootLayout,
-                "scaleY",
-                1.0f,
-                0.9f
-        );
-        scaleY.setDuration(400);
-        scaleY.setInterpolator(new AccelerateInterpolator());
-
-        // 组合所有动画
-        exitAnimatorSet.playTogether(slideDown, fadeOut, scaleX, scaleY);
-
-        // 动画结束后关闭Activity
-        exitAnimatorSet.addListener(new android.animation.AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(android.animation.Animator animation) {
-                // 确保在动画结束后调用finish()
-                finish();
-                // 禁用系统默认的Activity切换动画，因为我们已经有自定义动画
-                overridePendingTransition(0, 0);
-            }
-
-            @Override
-            public void onAnimationCancel(android.animation.Animator animation) {
-                // 如果动画被取消，也要确保Activity能正常关闭
-                finish();
-                overridePendingTransition(0, 0);
-            }
-        });
-
-        // 开始动画
-        exitAnimatorSet.start();
-
-        Log.d(TAG, "开始执行退出动画");
-    }
-
-    /**
-     * 切换点赞状态
-     */
-    private void toggleLike() {
-        isLiked = !isLiked;
-        updateLikeButton();
-        playLikeAnimation();
-
-        Log.d(TAG, "点赞状态: " + (isLiked ? "已收藏" : "已取消收藏"));
-    }
-
-    /**
-     * 更新点赞按钮的图标和颜色
-     */
-    private void updateLikeButton() {
-        if (isLiked) {
-            btnLike.setImageResource(R.drawable.ic_favorite);
-            // 已点赞使用红色
-            btnLike.setColorFilter(getResources().getColor(R.color.like_color_active, null));
-        } else {
-            btnLike.setImageResource(R.drawable.ic_favorite_border);
-            // 未点赞使用当前主题色
-            btnLike.setColorFilter(getCurrentThemeColor());
-        }
-    }
-
-    /**
-     * 播放点赞动画
-     */
-    private void playLikeAnimation() {
-        // 取消之前的动画
-        if (likeAnimator != null && likeAnimator.isRunning()) {
-            likeAnimator.cancel();
-        }
-
-        if (isLiked) {
-            // 点赞动画：缩放 + 旋转
-            playLikeScaleAnimation();
-        } else {
-            // 取消点赞动画：简单缩放
-            playUnlikeAnimation();
-        }
-    }
-
-    /**
-     * 点赞缩放动画
-     */
-    private void playLikeScaleAnimation() {
-        AnimatorSet animatorSet = new AnimatorSet();
-
-        // 第一阶段：快速放大
-        ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(btnLike, "scaleX", 1.0f, 1.3f);
-        ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(btnLike, "scaleY", 1.0f, 1.3f);
-        scaleUpX.setDuration(150);
-        scaleUpY.setDuration(150);
-        scaleUpX.setInterpolator(new AccelerateInterpolator());
-        scaleUpY.setInterpolator(new AccelerateInterpolator());
-
-        // 第二阶段：回弹
-        ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(btnLike, "scaleX", 1.3f, 1.0f);
-        ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(btnLike, "scaleY", 1.3f, 1.0f);
-        scaleDownX.setDuration(150);
-        scaleDownY.setDuration(150);
-        scaleDownX.setInterpolator(new OvershootInterpolator());
-        scaleDownY.setInterpolator(new OvershootInterpolator());
-
-        // 旋转动画
-        ObjectAnimator rotation = ObjectAnimator.ofFloat(btnLike, "rotation", 0f, 360f);
-        rotation.setDuration(300);
-        rotation.setInterpolator(new DecelerateInterpolator());
-
-        // 组合动画
-        animatorSet.playSequentially(scaleUpX, scaleDownX);
-        animatorSet.play(scaleUpY).with(scaleUpX);
-        animatorSet.play(scaleDownY).with(scaleDownX);
-        animatorSet.play(rotation).after(scaleUpX); // 旋转在放大后开始
-
-        animatorSet.start();
-    }
-
-    /**
-     * 取消点赞动画
-     */
-    private void playUnlikeAnimation() {
-        likeAnimator = ValueAnimator.ofFloat(1f, 0.8f, 1f);
-        likeAnimator.setDuration(300);
-        likeAnimator.addUpdateListener(animation -> {
-            float scale = (float) animation.getAnimatedValue();
-            btnLike.setScaleX(scale);
-            btnLike.setScaleY(scale);
-        });
-        likeAnimator.start();
-    }
-
-    /**
-     * ServiceConnection，正确设置监听器
-     */
-    private ServiceConnection serviceConnection = new ServiceConnection() {
-        @Override
-        public void onServiceConnected(ComponentName name, IBinder service) {
-            MusicPlayerService.MusicBinder binder = (MusicPlayerService.MusicBinder) service;
-            musicService = binder.getService();
-            serviceBound = true;
-
-            // 设置回调监听器
-            musicService.setOnPlaybackStateChangeListener(MusicPlayerActivity.this);
-
-            Log.d(TAG, "服务已绑定");
-            // 确保服务中的播放列表与MusicManager同步
-            musicService.updatePlaylist(musicManager.getPlaylist());
-            musicService.setCurrentPosition(musicManager.getCurrentPosition());
-
-            // 同步播放模式
-            musicService.setPlayMode(currentPlayMode);
-            // 如果服务没有在播放，则开始播放当前音乐
-            if (!musicService.isPlaying() && musicManager.getCurrentMusic() != null) {
-                musicService.play();
-            }
-
-            // 更新UI状态
-            updatePlaybackState(musicService.isPlaying());
-            updateProgress();
-            updatePlayModeButton();
-        }
-        @Override
-        public void onServiceDisconnected(ComponentName name) {
-            serviceBound = false;
-            Log.d(TAG, "服务已断开");
-        }
-    };
-
-    private void bindMusicService() {
-        Intent intent = new Intent(this, MusicPlayerService.class);
-        // 启动服务，确保服务在后台运行
-        startService(intent);
-        // 绑定服务，以便Activity可以与服务通信
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
-        Log.d(TAG, "尝试绑定音乐服务");
-    }
-
-    private void unbindMusicService() {
-        if (serviceBound) {
-            unbindService(serviceConnection);
-            serviceBound = false;
-            Log.d(TAG, "服务已解绑");
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        unbindMusicService();
-        handler.removeCallbacks(updateProgressRunnable);
-        Log.d(TAG, "Activity销毁");
-    }
 
     private void updateSongInfo(MusicInfo musicInfo) {
         if (musicInfo == null) {
             Log.e(TAG, "updateSongInfo: musicInfo is null");
             return;
         }
-        tvSongName.setText(musicInfo.getMusicName());
-        tvArtistName.setText(musicInfo.getAuthor());
 
-        // 加载封面并提取颜色
+        try {
+            tvSongName.setText(musicInfo.getMusicName());
+            tvArtistName.setText(musicInfo.getAuthor());
+
+            // 从重试次数0开始加载图片
+            loadCoverImage(musicInfo.getCoverUrl(), 0);
+
+            if (lyricFragment != null) {
+                lyricFragment.updateLyric(musicInfo.getLyricUrl());
+            }
+
+            isLiked = musicInfo.isLiked();
+            updateLikeButton();
+
+        } catch (Exception e) {
+            Log.e(TAG, "更新歌曲信息时出错: " + e.getMessage());
+        }
+    }
+
+    private void loadCoverImage(String coverUrl, int retryCount) {
         Glide.with(this)
                 .asBitmap()
-                .load(musicInfo.getCoverUrl())
+                .load(coverUrl)
+                .error(R.drawable.default_album_art)
                 .into(new CustomTarget<Bitmap>() {
                     @Override
                     public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
                         if (albumArtFragment != null) {
                             albumArtFragment.setAlbumArt(resource);
+
+                            safeServiceCall(service -> {
+                                albumArtFragment.setRotationAnimation(service.isPlaying());
+                            });
                         }
                         extractColorFromBitmap(resource);
                     }
@@ -609,56 +637,55 @@ public class MusicPlayerActivity extends AppCompatActivity
                             albumArtFragment.setAlbumArt(null);
                         }
                     }
+
+                    @Override
+                    public void onLoadFailed(@Nullable Drawable errorDrawable) {
+                        if (retryCount < 3) {
+                            // 重试，延迟1秒后重新加载
+                            Log.w(TAG, "封面加载失败，正在重试: " + (retryCount + 1) + "/3");
+                            new Handler().postDelayed(() -> {
+                                loadCoverImage(coverUrl, retryCount + 1);
+                            }, 1000);
+                        } else {
+                            Log.e(TAG, "封面加载失败，已重试3次");
+                            // 可选：设置默认图片
+                            if (albumArtFragment != null) {
+                                albumArtFragment.setAlbumArt(null);
+                            }
+                        }
+                    }
                 });
-
-        // 更新歌词Fragment
-        if (lyricFragment != null) {
-            lyricFragment.updateLyric(musicInfo.getLyricUrl());
-        }
-
-        // 更新点赞状态
-        // isLiked = musicManager.getMusicDao().getMusicLikedStatus(musicInfo.getId()); // 需要MusicDao实例
-        // updateLikeButton();
     }
+
 
     private void extractColorFromBitmap(Bitmap bitmap) {
         Palette.from(bitmap).generate(palette -> {
             if (palette != null) {
-                int defaultColor = Color.parseColor("#424242"); // 深灰色
+                int defaultColor = Color.parseColor("#424242");
                 currentDominantColor = palette.getDominantColor(defaultColor);
-                int mutedColor = palette.getMutedColor(defaultColor);
-                int vibrantColor = palette.getVibrantColor(defaultColor);
-
-                // 使用提取的颜色更新UI
                 updateUIColors(currentDominantColor);
             }
         });
     }
 
     private void updateUIColors(int color) {
-        // 设置背景颜色，可以根据需要调整透明度或饱和度
         rootLayout.setBackgroundColor(color);
-
-        // 调整文本颜色以确保可读性
         int textColor = getContrastColor(color);
+
         tvSongName.setTextColor(textColor);
         tvArtistName.setTextColor(textColor);
         tvCurrentTime.setTextColor(textColor);
         tvTotalTime.setTextColor(textColor);
 
-        // 更新按钮颜色
         btnClose.setColorFilter(textColor);
         btnPrevious.setColorFilter(textColor);
         btnNext.setColorFilter(textColor);
         btnPlayMode.setColorFilter(textColor);
         btnPlaylist.setColorFilter(textColor);
-        // btnLike.setColorFilter(textColor); // 点赞按钮颜色单独处理
 
-        // 更新SeekBar颜色
         seekBar.setProgressTintList(android.content.res.ColorStateList.valueOf(textColor));
         seekBar.setThumbTintList(android.content.res.ColorStateList.valueOf(textColor));
 
-        // 通知Fragment更新颜色
         if (albumArtFragment instanceof ColorAwareComponent) {
             ((ColorAwareComponent) albumArtFragment).updateColors(color, textColor);
         }
@@ -668,29 +695,30 @@ public class MusicPlayerActivity extends AppCompatActivity
     }
 
     private int getContrastColor(int color) {
-        // 根据背景色亮度选择黑色或白色作为对比色
         return ColorUtils.calculateLuminance(color) > 0.5 ? Color.BLACK : Color.WHITE;
     }
 
-    @Override
-    public void onPlaybackStateChanged(boolean isPlaying) {
-        updatePlaybackState(isPlaying);
+    private void updatePlaybackState(boolean isPlaying) {
+        if (isPlaying) {
+            btnPlayPause.setImageResource(R.drawable.ic_pause);
+            startUpdatingProgress();
+            if (albumArtFragment != null) {
+                if (isActivityVisible) {
+                    albumArtFragment.setRotationAnimation(true);
+                } else if (!isRotationPaused) {
+                    isRotationPaused = false;
+                }
+            }
+        } else {
+            btnPlayPause.setImageResource(R.drawable.ic_play);
+            stopUpdatingProgress();
+            if (albumArtFragment != null) {
+                albumArtFragment.setRotationAnimation(false);
+                isRotationPaused = true;
+            }
+        }
     }
 
-
-    @Override
-    public void onProgressUpdate(int currentPosition, int totalDuration) {
-        onProgressChanged(currentPosition, totalDuration);
-    }
-//    @Override
-//    public void onMusicChanged(MusicInfo musicInfo) {
-//        updateSongInfo(musicInfo);
-//        // 更新MusicManager的当前播放位置
-//        musicManager.setCurrentPosition(musicManager.getPlaylist().indexOf(musicInfo));
-//    }
-
-
-//    进度条控制
     public void onProgressChanged(int currentPosition, int totalDuration) {
         tvCurrentTime.setText(formatTime(currentPosition));
         tvTotalTime.setText(formatTime(totalDuration));
@@ -703,91 +731,217 @@ public class MusicPlayerActivity extends AppCompatActivity
         }
     }
 
-    // 添加播放状态变化时的专辑封面动画控制
-    private void updatePlaybackState(boolean isPlaying) {
-        if (isPlaying) {
-            btnPlayPause.setImageResource(R.drawable.ic_pause);
-            startUpdatingProgress();
-
-            // 启动专辑旋转动画
-            if (albumArtFragment != null) {
-                albumArtFragment.setRotationAnimation(true);
-            }
-        } else {
-            btnPlayPause.setImageResource(R.drawable.ic_play);
-            stopUpdatingProgress();
-
-            // 暂停专辑旋转动画
-            if (albumArtFragment != null) {
-                albumArtFragment.setRotationAnimation(false);
-            }
-        }
-    }
-
-
-
-    private void startUpdatingProgress() {
-        if (updateProgressRunnable == null) {
-            updateProgressRunnable = new Runnable() {
-                @Override
-                public void run() {
-                    if (serviceBound && musicService.isPlaying()) {
-                        int current = musicService.getCurrentPosition();
-                        int duration = musicService.getDuration();
-                        onProgressChanged(current, duration);
-                    }
-                    handler.postDelayed(this, 1000); // 每秒更新一次
-                }
-            };
-        }
-        handler.post(updateProgressRunnable);
-    }
-
-    private void stopUpdatingProgress() {
-        if (updateProgressRunnable != null) {
-            handler.removeCallbacks(updateProgressRunnable);
-        }
-    }
-
     private String formatTime(int milliseconds) {
         int minutes = (milliseconds / 1000) / 60;
         int seconds = (milliseconds / 1000) % 60;
         return String.format("%02d:%02d", minutes, seconds);
     }
 
-    private void playPrevious() {
-        if (serviceBound) {
-            musicService.playPrevious();
+    private void finishWithAnimation() {
+        if (isFinishing()) {
+            return;
         }
-    }
 
-    private void playNext() {
-        if (serviceBound) {
-            musicService.playNext();
-        }
-    }
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+        AnimatorSet exitAnimatorSet = new AnimatorSet();
 
-    /**
-     * 切换播放模式
-     */
-    private void switchPlayMode() {
-        MusicPlayerService.PlayMode[] modes = MusicPlayerService.PlayMode.values();
-        int currentIndex = -1;
-        // 找到当前模式的索引
-        for (int i = 0; i < modes.length; i++) {
-            if (modes[i] == currentPlayMode) {
-                currentIndex = i;
-                break;
+        ObjectAnimator slideDown = ObjectAnimator.ofFloat(rootLayout, "translationY", 0f, screenHeight);
+        slideDown.setDuration(400);
+        slideDown.setInterpolator(new AccelerateInterpolator(1.5f));
+
+        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(rootLayout, "alpha", 1.0f, 0.0f);
+        fadeOut.setDuration(300);
+        fadeOut.setStartDelay(100);
+        fadeOut.setInterpolator(new AccelerateInterpolator());
+
+        ObjectAnimator scaleX = ObjectAnimator.ofFloat(rootLayout, "scaleX", 1.0f, 0.9f);
+        scaleX.setDuration(400);
+        scaleX.setInterpolator(new AccelerateInterpolator());
+
+        ObjectAnimator scaleY = ObjectAnimator.ofFloat(rootLayout, "scaleY", 1.0f, 0.9f);
+        scaleY.setDuration(400);
+        scaleY.setInterpolator(new AccelerateInterpolator());
+
+        exitAnimatorSet.playTogether(slideDown, fadeOut, scaleX, scaleY);
+
+        exitAnimatorSet.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                finish();
+                overridePendingTransition(0, 0);
             }
+
+            @Override
+            public void onAnimationCancel(android.animation.Animator animation) {
+                finish();
+                overridePendingTransition(0, 0);
+            }
+        });
+
+        exitAnimatorSet.start();
+        Log.d(TAG, "开始执行退出动画");
+    }
+
+    private void toggleLike() {
+        isLiked = !isLiked;
+        updateLikeButton();
+        playLikeAnimation();
+        Log.d(TAG, "点赞状态: " + (isLiked ? "已收藏" : "已取消收藏"));
+    }
+
+    private void updateLikeButton() {
+        if (isLiked) {
+            btnLike.setImageResource(R.drawable.ic_favorite);
+            btnLike.setColorFilter(getResources().getColor(R.color.like_color_active, null));
+        } else {
+            btnLike.setImageResource(R.drawable.ic_favorite_border);
+            btnLike.setColorFilter(getCurrentThemeColor());
         }
-        // 切换到下一个模式
-        int nextIndex = (currentIndex + 1) % modes.length;
-        setPlayMode(modes[nextIndex]);
+    }
+
+    private void playLikeAnimation() {
+        if (likeAnimator != null && likeAnimator.isRunning()) {
+            likeAnimator.cancel();
+        }
+
+        if (isLiked) {
+            playLikeScaleAnimation();
+        } else {
+            playUnlikeAnimation();
+        }
+    }
+
+    private void playLikeScaleAnimation() {
+        AnimatorSet animatorSet = new AnimatorSet();
+
+        ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(btnLike, "scaleX", 1.0f, 1.3f);
+        ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(btnLike, "scaleY", 1.0f, 1.3f);
+        scaleUpX.setDuration(150);
+        scaleUpY.setDuration(150);
+        scaleUpX.setInterpolator(new AccelerateInterpolator());
+        scaleUpY.setInterpolator(new AccelerateInterpolator());
+
+        ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(btnLike, "scaleX", 1.3f, 1.0f);
+        ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(btnLike, "scaleY", 1.3f, 1.0f);
+        scaleDownX.setDuration(150);
+        scaleDownY.setDuration(150);
+        scaleDownX.setInterpolator(new OvershootInterpolator());
+        scaleDownY.setInterpolator(new OvershootInterpolator());
+
+        ObjectAnimator rotation = ObjectAnimator.ofFloat(btnLike, "rotation", 0f, 360f);
+        rotation.setDuration(300);
+        rotation.setInterpolator(new DecelerateInterpolator());
+
+        animatorSet.playSequentially(scaleUpX, scaleDownX);
+        animatorSet.play(scaleUpY).with(scaleUpX);
+        animatorSet.play(scaleDownY).with(scaleDownX);
+        animatorSet.play(rotation).after(scaleUpX);
+
+        animatorSet.start();
+    }
+
+    private void playUnlikeAnimation() {
+        likeAnimator = ValueAnimator.ofFloat(1f, 0.8f, 1f);
+        likeAnimator.setDuration(300);
+        likeAnimator.addUpdateListener(animation -> {
+            float scale = (float) animation.getAnimatedValue();
+            btnLike.setScaleX(scale);
+            btnLike.setScaleY(scale);
+        });
+        likeAnimator.start();
     }
 
     private int getCurrentThemeColor() {
-        // 返回当前背景的主色调，用于点赞按钮未点赞时的颜色
         return currentDominantColor;
+    }
+
+    // 音乐列表弹窗
+    public void showPlaylistDialog() {
+        currentPlaylistDialog = MusicPlaylistDialog.newInstance();
+        currentPlaylistDialog.show(getSupportFragmentManager(), "MusicPlaylistDialog");
+    }
+
+    // 实现接口方法
+    @Override
+    public void onPlayMusicFromPlaylist(int position) {
+        playMusicFromPlaylist(position);
+    }
+
+    @Override
+    public void onPlaylistChanged() {
+        handlePlaylistChanged();
+    }
+
+    @Override
+    public void onPlayModeChanged(MusicPlayerService.PlayMode playMode) {
+        setPlayMode(playMode);
+    }
+
+    @Override
+    public void onSongChanged(int position) {
+        MusicInfo musicInfo = musicManager.getMusicAt(position);
+        if (musicInfo != null) {
+            updateSongInfo(musicInfo);
+            musicManager.setCurrentPosition(position);
+        } else {
+            Log.e(TAG, "onSongChanged: 位置 " + position + " 的音乐信息为null");
+        }
+    }
+
+    @Override
+    public MusicPlayerService.PlayMode getCurrentPlayMode() {
+        return currentPlayMode;
+    }
+
+    public void playMusicFromPlaylist(int position) {
+        if (!musicManager.isValidPosition(position)) {
+            Log.e(TAG, "playMusicFromPlaylist: 无效位置 " + position);
+            return;
+        }
+
+        MusicInfo musicInfo = musicManager.getMusicAt(position);
+        if (musicInfo == null) {
+            Log.e(TAG, "playMusicFromPlaylist: 位置 " + position + " 的音乐信息为null");
+            return;
+        }
+
+        Log.d(TAG, "从播放列表播放歌曲: " + musicInfo.getMusicName() + ", 位置: " + position);
+
+        musicManager.setCurrentPosition(position);
+        updateSongInfo(musicInfo);
+
+        safeServiceCall(service -> service.playAtPosition(position));
+    }
+
+    public void handlePlaylistChanged() {
+        Log.d(TAG, "处理播放列表变化");
+
+        if (musicManager.isPlaylistEmpty()) {
+            Log.d(TAG, "播放列表为空，关闭Activity");
+            finish();
+            return;
+        }
+
+        safeServiceCall(service -> service.updatePlaylist(musicManager.getPlaylist()));
+
+        MusicInfo currentMusic = musicManager.getCurrentMusic();
+        if (currentMusic != null) {
+            updateSongInfo(currentMusic);
+        }
+
+        if (currentPlaylistDialog != null) {
+            currentPlaylistDialog.notifyPlaylistChanged();
+        }
+    }
+
+    @Override
+    public void onPlaybackStateChanged(boolean isPlaying) {
+        updatePlaybackState(isPlaying);
+    }
+
+    @Override
+    public void onProgressUpdate(int currentPosition, int totalDuration) {
+        onProgressChanged(currentPosition, totalDuration);
     }
 
     private class ViewPagerAdapter extends FragmentStateAdapter {
@@ -811,5 +965,3 @@ public class MusicPlayerActivity extends AppCompatActivity
         }
     }
 }
-
-

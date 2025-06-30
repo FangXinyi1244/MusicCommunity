@@ -10,8 +10,8 @@
         android:background="@color/white"
         android:elevation="8dp"
         android:padding="4dp"
-        android:clickable="true"
-        android:focusable="true">
+        android:clickable="false"
+        android:focusable="false">
 
         <!-- 专辑封面 -->
         <ImageView

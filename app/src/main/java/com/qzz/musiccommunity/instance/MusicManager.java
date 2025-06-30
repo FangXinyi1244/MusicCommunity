@@ -3,6 +3,7 @@ package com.qzz.musiccommunity.instance;
 import android.content.Context;
 import android.util.Log;
 
+import com.qzz.musiccommunity.Service.MusicPlayerService;
 import com.qzz.musiccommunity.database.MusicDao;
 import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.model.BannerItem;
