@@ -753,10 +753,15 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         }
     }
     @Override
-    public void onPlaylistChanged() {
+    public void onPlaylistChanged(int  position) {
         // 播放列表变化时更新UI
         if (bottomMusicPlayerView != null) {
             bottomMusicPlayerView.updatePlayerView();
+        }
+
+        // 同步播放器
+        if(musicService != null){
+            musicService.forcePlayAtPosition(position);
         }
     }
     @Override

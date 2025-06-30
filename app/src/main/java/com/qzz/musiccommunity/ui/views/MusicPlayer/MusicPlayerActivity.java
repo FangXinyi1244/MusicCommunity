@@ -45,6 +45,7 @@ import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.ColorAwareComponent;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.fragment.AlbumArtFragment;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.fragment.LyricFragment;
 
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -862,15 +863,111 @@ public class MusicPlayerActivity extends AppCompatActivity
         currentPlaylistDialog.show(getSupportFragmentManager(), "MusicPlaylistDialog");
     }
 
+    /**
+     * 同步播放状态 - 在播放列表变化后确保所有组件状态一致
+     *
+     * @param isCurrentMusicDeleted 当前播放的歌曲是否被删除
+     * @return 同步后的当前播放位置
+     */
+    private int synchronizePlaybackState(boolean isCurrentMusicDeleted) {
+        Log.d(TAG, "开始同步播放状态...");
+
+        // 获取当前状态
+        int currentPosition = musicManager.getCurrentPosition();
+        List<MusicInfo> playlist = musicManager.getPlaylist();
+        boolean wasPlaying = false;
+
+        // 保存当前播放状态
+        if (serviceBound && musicService != null) {
+            try {
+                wasPlaying = musicService.isPlaying();
+            } catch (Exception e) {
+                Log.e(TAG, "获取播放状态失败", e);
+            }
+        }
+
+        // 如果播放列表为空，直接返回
+        if (playlist == null || playlist.isEmpty()) {
+            Log.d(TAG, "播放列表为空，无需同步");
+            return -1;
+        }
+
+        // 检查当前位置是否有效，如果无效（包括歌曲被删除的情况）则调整
+        if (isCurrentMusicDeleted || !musicManager.isValidPosition(currentPosition)) {
+            Log.d(TAG, "当前位置无效或歌曲已删除，需要调整位置");
+
+            // 选择新位置：优先使用原位置，如果超出范围则使用最后一首
+            int newPosition = Math.min(currentPosition, playlist.size() - 1);
+
+            if (newPosition >= 0) {
+                Log.d(TAG, "调整位置: " + currentPosition + " -> " + newPosition);
+                currentPosition = newPosition;
+                musicManager.setCurrentPosition(newPosition);
+            } else {
+                Log.e(TAG, "无法调整到有效位置");
+                return -1;
+            }
+        }
+
+        // 同步到服务
+        if (serviceBound && musicService != null) {
+            try {
+                // 先更新播放列表
+                musicService.updatePlaylist(playlist);
+
+                // 更新当前位置
+                if (isCurrentMusicDeleted) {
+                    // 如果当前歌曲被删除，需要完全重置播放
+                    musicService.forcePlayAtPosition(currentPosition);
+
+                    // 如果之前正在播放，则继续播放
+                    if (wasPlaying) {
+                        musicService.play();
+                    }
+                } else {
+                    // 如果只是其他歌曲被删除，只需要同步列表和位置
+                    musicService.setCurrentPosition(currentPosition);
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "同步到服务失败", e);
+                handleServiceError();
+            }
+        } else {
+            Log.w(TAG, "服务未绑定，无法同步");
+        }
+
+        // 更新UI
+        MusicInfo currentMusic = musicManager.getCurrentMusic();
+        if (currentMusic != null) {
+            updateSongInfo(currentMusic);
+        }
+
+        Log.d(TAG, "播放状态同步完成，当前位置: " + currentPosition);
+        return currentPosition;
+    }
+
+
     // 实现接口方法
     @Override
     public void onPlayMusicFromPlaylist(int position) {
-        playMusicFromPlaylist(position);
+        if (!musicManager.isValidPosition(position)) {
+            Log.e(TAG, "播放位置无效: " + position);
+            return;
+        }
+
+        musicManager.setCurrentPosition(position);
+        safeServiceCall(service -> service.playAtPosition(position));
+
+        MusicInfo musicInfo = musicManager.getMusicAt(position);
+        if (musicInfo != null) {
+            updateSongInfo(musicInfo);
+        }
     }
 
     @Override
-    public void onPlaylistChanged() {
-        handlePlaylistChanged();
+    public void onPlaylistChanged(int  position) {
+        handlePlaylistChanged(position);
     }
 
     @Override
@@ -914,7 +1011,7 @@ public class MusicPlayerActivity extends AppCompatActivity
         safeServiceCall(service -> service.playAtPosition(position));
     }
 
-    public void handlePlaylistChanged() {
+    public void handlePlaylistChanged(int  position) {
         Log.d(TAG, "处理播放列表变化");
 
         if (musicManager.isPlaylistEmpty()) {
@@ -923,17 +1020,29 @@ public class MusicPlayerActivity extends AppCompatActivity
             return;
         }
 
-        safeServiceCall(service -> service.updatePlaylist(musicManager.getPlaylist()));
+        // 获取当前播放位置
+        int currentPos = musicManager.getCurrentPosition();
 
-        MusicInfo currentMusic = musicManager.getCurrentMusic();
-        if (currentMusic != null) {
-            updateSongInfo(currentMusic);
+        boolean isCurrentMusicDeleted = false;
+        // 检查当前位置是否仍然有效
+        if (musicManager.isValidPosition(currentPos)|| currentPos == position){
+            isCurrentMusicDeleted = true;
         }
 
+        // 使用同步方法确保所有组件状态一致
+        int newPosition = synchronizePlaybackState(isCurrentMusicDeleted);
+
+        if (newPosition >= 0) {
+            Log.d(TAG, "同步后的播放位置: " + newPosition);
+        }
+
+        // 更新播放列表对话框
         if (currentPlaylistDialog != null) {
             currentPlaylistDialog.notifyPlaylistChanged();
         }
     }
+
+
 
     @Override
     public void onPlaybackStateChanged(boolean isPlaying) {

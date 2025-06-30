@@ -43,7 +43,7 @@ public class MusicPlaylistDialog extends DialogFragment implements MusicPlaylist
     // 播放列表变化的监听器接口
     public interface OnPlaylistActionListener {
         void onPlayMusicFromPlaylist(int position);
-        void onPlaylistChanged();
+        void onPlaylistChanged(int  position);
         void onPlayModeChanged(MusicPlayerService.PlayMode playMode);
         MusicPlayerService.PlayMode getCurrentPlayMode();
     }
@@ -200,7 +200,7 @@ public class MusicPlaylistDialog extends DialogFragment implements MusicPlaylist
         if (removed) {
             // 通知Activity播放列表已变化
             if (playlistActionListener != null) {
-                playlistActionListener.onPlaylistChanged();
+                playlistActionListener.onPlaylistChanged(position);
             }
 
             // 更新对话框显示

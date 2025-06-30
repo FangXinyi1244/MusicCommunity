@@ -264,6 +264,74 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
+    /**
+     * 强制重置播放器并切换到新歌曲
+     * 此方法会中断所有当前播放和准备操作，确保立即切换
+     * @param position 要播放的新位置
+     */
+    public void forcePlayAtPosition(int position) {
+        Log.d(TAG, "强制切换到新位置: " + position);
+
+        // 1. 停止当前所有播放和准备操作
+        if (mediaPlayer != null) {
+            // 取消所有可能的异步操作
+            progressHandler.removeCallbacks(progressUpdateRunnable);
+
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.reset();
+            } catch (IllegalStateException e) {
+                Log.e(TAG, "重置播放器时出错", e);
+                // 如果当前播放器状态异常，则重新创建
+                releaseMediaPlayer();
+                initMediaPlayer();
+            }
+        }
+
+        // 2. 更新播放位置
+        List<MusicInfo> playlist = musicManager.getPlaylist();
+        if (playlist == null || playlist.isEmpty() || position < 0 || position >= playlist.size()) {
+            Log.e(TAG, "无法播放：无效的位置 " + position + " 或播放列表为空");
+            return;
+        }
+
+        musicManager.setCurrentPosition(position);
+        MusicInfo musicInfo = playlist.get(position);
+        isPrepared = false;
+
+        // 3. 开始新歌曲播放
+        try {
+            Log.d(TAG, "强制播放新歌曲: " + musicInfo.getMusicName());
+            mediaPlayer.setDataSource(musicInfo.getMusicUrl());
+            mediaPlayer.prepareAsync();
+
+            // 4. 更新通知和界面
+            updateNotification(musicInfo);
+            if (playbackStateChangeListener != null) {
+                playbackStateChangeListener.onSongChanged(position);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "播放出错", e);
+        }
+    }
+
+    /**
+     * 完全释放MediaPlayer资源
+     */
+    private void releaseMediaPlayer() {
+        if (mediaPlayer != null) {
+            try {
+                mediaPlayer.release();
+            } catch (Exception e) {
+                Log.e(TAG, "释放MediaPlayer时出错", e);
+            }
+            mediaPlayer = null;
+        }
+    }
+
+
     public boolean isPlaying() {
         return mediaPlayer != null && mediaPlayer.isPlaying();
     }
