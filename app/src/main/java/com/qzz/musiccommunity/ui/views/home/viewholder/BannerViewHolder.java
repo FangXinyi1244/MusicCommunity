@@ -1,7 +1,6 @@
 package com.qzz.musiccommunity.ui.views.home.viewholder;
 
 import android.content.Context;
-import android.content.Intent;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
@@ -11,12 +10,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.model.BannerItem;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 import com.qzz.musiccommunity.ui.views.home.adapter.ImageAdapter;
 import com.youth.banner.Banner;
-import com.youth.banner.config.IndicatorConfig;
-import com.youth.banner.indicator.CircleIndicator;
 import com.youth.banner.listener.OnBannerListener;
 
 public class BannerViewHolder extends RecyclerView.ViewHolder {

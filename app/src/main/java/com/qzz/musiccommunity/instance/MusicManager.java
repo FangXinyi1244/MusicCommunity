@@ -2,12 +2,12 @@ package com.qzz.musiccommunity.instance;
 
 import android.util.Log;
 
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.model.BannerItem;
 import com.qzz.musiccommunity.model.HorizontalCardItem;
 import com.qzz.musiccommunity.model.OneColumnItem;
 import com.qzz.musiccommunity.model.TwoColumnItem;
 import com.qzz.musiccommunity.model.iface.ListItem;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,6 +44,7 @@ public class MusicManager {
         } else {
             currentPlaylist = new ArrayList<>(playlist);
         }
+        currentPosition = 0; // 重置播放位置
         Log.d(TAG, "已更新播放列表，共 " + currentPlaylist.size() + " 首歌曲");
     }
 
@@ -117,7 +118,62 @@ public class MusicManager {
         Log.d(TAG, "播放列表重新排列完成，当前播放: " + newMusic.getMusicName() + "，列表总数: " + currentPlaylist.size());
     }
 
+    /**
+     * 删除指定位置的歌曲
+     * @param position 要删除的歌曲在播放列表中的位置
+     * @return 是否删除成功
+     */
+    public boolean removeSong(int position) {
+        if (position < 0 || position >= currentPlaylist.size()) {
+            Log.e(TAG, "removeSong: 无效的位置 " + position);
+            return false;
+        }
 
+        MusicInfo removedMusic = currentPlaylist.get(position);
+        currentPlaylist.remove(position);
+
+        // 调整当前播放位置
+        if (currentPosition > position) {
+            // 删除的歌曲在当前播放歌曲之前，当前位置需要前移
+            currentPosition--;
+        } else if (currentPosition == position) {
+            // 删除的是当前播放歌曲
+            if (currentPlaylist.isEmpty()) {
+                // 如果播放列表为空，重置位置
+                currentPosition = 0;
+            } else if (currentPosition >= currentPlaylist.size()) {
+                // 如果当前位置超出范围，调整到最后一首
+                currentPosition = currentPlaylist.size() - 1;
+            }
+            // 如果当前位置仍在有效范围内，保持不变
+        }
+
+        Log.d(TAG, "删除歌曲: " + removedMusic.getMusicName() +
+                ", 新的播放位置: " + currentPosition +
+                ", 剩余歌曲数: " + currentPlaylist.size());
+
+        return true;
+    }
+
+    /**
+     * 从播放列表中删除指定的歌曲
+     * @param musicInfo 要删除的音乐信息
+     * @return 是否删除成功
+     */
+    public boolean removeMusic(MusicInfo musicInfo) {
+        if (musicInfo == null) {
+            Log.e(TAG, "removeMusic: musicInfo为null");
+            return false;
+        }
+
+        int existingIndex = findMusicIndex(musicInfo);
+        if (existingIndex != -1) {
+            return removeSong(existingIndex);
+        } else {
+            Log.e(TAG, "删除失败: 播放列表中未找到歌曲 " + musicInfo.getMusicName());
+            return false;
+        }
+    }
 
     // 清空播放列表
     public void clearPlaylist() {
@@ -126,18 +182,24 @@ public class MusicManager {
         Log.d(TAG, "播放列表已清空");
     }
 
-    // 获取当前播放列表
+    // 获取当前播放列表（返回副本以防止外部修改）
     public List<MusicInfo> getPlaylist() {
         return new ArrayList<>(currentPlaylist);
     }
 
     // 设置当前播放位置
     public void setCurrentPosition(int position) {
+        if (currentPlaylist.isEmpty()) {
+            currentPosition = 0;
+            Log.d(TAG, "播放列表为空，位置设置为0");
+            return;
+        }
+
         if (position >= 0 && position < currentPlaylist.size()) {
             currentPosition = position;
             Log.d(TAG, "当前播放位置已设置为：" + position);
         } else {
-            Log.e(TAG, "设置位置无效：" + position);
+            Log.e(TAG, "设置位置无效：" + position + "，播放列表大小：" + currentPlaylist.size());
         }
     }
 
@@ -148,7 +210,7 @@ public class MusicManager {
 
     // 获取当前播放的音乐
     public MusicInfo getCurrentMusic() {
-        if (currentPlaylist.isEmpty() || currentPosition >= currentPlaylist.size()) {
+        if (currentPlaylist.isEmpty() || currentPosition < 0 || currentPosition >= currentPlaylist.size()) {
             return null;
         }
         return currentPlaylist.get(currentPosition);
@@ -162,6 +224,27 @@ public class MusicManager {
     // 检查播放列表是否为空
     public boolean isPlaylistEmpty() {
         return currentPlaylist.isEmpty();
+    }
+
+    /**
+     * 获取指定位置的音乐信息
+     * @param position 位置索引
+     * @return 音乐信息，如果位置无效则返回null
+     */
+    public MusicInfo getMusicAt(int position) {
+        if (position >= 0 && position < currentPlaylist.size()) {
+            return currentPlaylist.get(position);
+        }
+        return null;
+    }
+
+    /**
+     * 检查位置是否有效
+     * @param position 要检查的位置
+     * @return 位置是否有效
+     */
+    public boolean isValidPosition(int position) {
+        return position >= 0 && position < currentPlaylist.size();
     }
 
     // 从主页的列表项收集所有音乐信息（保留此方法用于批量操作）
@@ -189,4 +272,3 @@ public class MusicManager {
         Log.d(TAG, "已从列表项收集 " + allMusic.size() + " 首歌曲");
     }
 }
-

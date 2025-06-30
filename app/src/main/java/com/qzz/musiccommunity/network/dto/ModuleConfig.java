@@ -1,5 +1,7 @@
 package com.qzz.musiccommunity.network.dto;
 
+import com.qzz.musiccommunity.database.dto.MusicInfo;
+
 import java.util.List;
 
 public class ModuleConfig {

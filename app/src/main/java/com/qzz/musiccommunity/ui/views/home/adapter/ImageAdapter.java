@@ -18,7 +18,7 @@ import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions;
 import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.qzz.musiccommunity.R;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.youth.banner.adapter.BannerAdapter;
 
 import java.util.List;

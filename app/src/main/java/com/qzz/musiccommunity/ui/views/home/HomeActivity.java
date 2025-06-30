@@ -24,7 +24,7 @@ import com.qzz.musiccommunity.network.DataConverter;
 import com.qzz.musiccommunity.network.RetrofitClient;
 import com.qzz.musiccommunity.network.dto.BaseResponse;
 import com.qzz.musiccommunity.network.dto.ModuleConfig;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.network.dto.PagedData;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.MusicPlayerActivity;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
@@ -34,7 +34,6 @@ import com.scwang.smart.refresh.layout.api.RefreshLayout;
 import com.scwang.smart.refresh.layout.listener.OnLoadMoreListener;
 import com.scwang.smart.refresh.layout.listener.OnRefreshListener;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -825,7 +824,7 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     @Override
     public void onPlayButtonClick(MusicInfo musicInfo, int position) {
         // 处理播放按钮点击事件，启动MusicPlayerActivity
-        musicInfo.printInfo();
+        musicInfo.printDetailedInfo();
         Log.d(TAG, "播放添加按钮点击: " + musicInfo.getMusicName() + ", 位置: " + position);
 
 
@@ -841,7 +840,7 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     @Override
     public void onItemClick(MusicInfo musicInfo, int position) {
         // 处理整个item点击事件，启动MusicPlayerActivity
-        musicInfo.printInfo();
+        musicInfo.printDetailedInfo();
         Log.d(TAG, "Item点击: " + musicInfo.getMusicName() + ", 位置: " + position);
 
         // 启动MusicPlayerActivity并传递当前音乐信息

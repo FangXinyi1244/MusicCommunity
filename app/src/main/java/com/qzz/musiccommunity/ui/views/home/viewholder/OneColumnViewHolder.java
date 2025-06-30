@@ -1,7 +1,5 @@
 package com.qzz.musiccommunity.ui.views.home.viewholder;
 
-import static com.google.android.material.internal.ViewUtils.dpToPx;
-
 import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.view.View;
@@ -21,7 +19,7 @@ import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.model.OneColumnItem;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 
 public class OneColumnViewHolder extends RecyclerView.ViewHolder {

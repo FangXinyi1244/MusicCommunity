@@ -1,7 +1,5 @@
 package com.qzz.musiccommunity.ui.views.home.viewholder;
 
-import static com.google.android.material.internal.ViewUtils.dpToPx;
-
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -9,7 +7,6 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
-import android.media.Image;
 import android.os.Build;
 import android.util.Log;
 import android.util.TypedValue;
@@ -33,7 +30,7 @@ import com.bumptech.glide.request.target.CustomTarget;
 import com.bumptech.glide.request.transition.Transition;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.model.TwoColumnItem;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 
 public class TwoColumnViewHolder extends RecyclerView.ViewHolder {

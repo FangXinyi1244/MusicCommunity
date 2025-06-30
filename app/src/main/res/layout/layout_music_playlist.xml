@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_dark"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- 标题区域 -->
+    <TextView
+        android:id="@+id/tvPlaylistTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="@string/current_playing_count"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        tools:text="当前播放6" />
+
+    <!-- 顺序模式切换区域 -->
+    <LinearLayout
+        android:id="@+id/llPlayMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_play_mode_container"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <!-- 播放模式图标 -->
+        <ImageView
+            android:id="@+id/ivPlayModeIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginEnd="12dp"
+            android:contentDescription="@string/play_mode_icon"
+            android:src="@drawable/ic_repeat_list"
+            app:tint="@color/colorAccent" />
+
+        <!-- 播放模式文本 -->
+        <TextView
+            android:id="@+id/tvPlayModeText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/play_mode_sequence"
+            android:textColor="@color/white"
+            android:textSize="16sp"
+            tools:text="顺序播放" />
+
+    </LinearLayout>
+
+    <!-- 歌曲列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvMusicList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp"
+        android:scrollbars="vertical"
+        tools:itemCount="6"
+        tools:listitem="@layout/item_music_playlist" />
+
+</LinearLayout>

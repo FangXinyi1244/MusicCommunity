@@ -1,6 +1,6 @@
 package com.qzz.musiccommunity.ui.views.MusicPlayer.iface;
 
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 
 public interface OnMusicItemClickListener {
     void onPlayButtonClick(MusicInfo musicInfo, int position);

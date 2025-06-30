@@ -37,7 +37,8 @@ import com.bumptech.glide.request.transition.Transition;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.Service.MusicPlayerService;
 import com.qzz.musiccommunity.instance.MusicManager;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
+import com.qzz.musiccommunity.ui.common.musicList.MusicPlaylistDialog;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.ColorAwareComponent;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.fragment.AlbumArtFragment;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.fragment.LyricFragment;
@@ -45,7 +46,9 @@ import com.qzz.musiccommunity.ui.views.MusicPlayer.fragment.LyricFragment;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MusicPlayerActivity extends AppCompatActivity implements MusicPlayerService.OnPlaybackStateChangeListener {
+public class MusicPlayerActivity extends AppCompatActivity
+        implements MusicPlayerService.OnPlaybackStateChangeListener,
+        MusicPlaylistDialog.OnPlaylistActionListener {
 
     private static final String TAG = "MusicPlayerActivity";
 
@@ -59,12 +62,10 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
     private Handler handler = new Handler();
     private Runnable updateProgressRunnable;
     private MusicManager musicManager;
-    private PlayMode currentPlayMode = PlayMode.SEQUENCE;
+    private MusicPlayerService.PlayMode currentPlayMode = MusicPlayerService.PlayMode.SEQUENCE;
     private AlbumArtFragment albumArtFragment;
     private LyricFragment lyricFragment;
-    public enum PlayMode {
-        SEQUENCE, RANDOM, REPEAT_ONE
-    }
+    private MusicPlaylistDialog currentPlaylistDialog;
 
     // 添加点赞状态变量
     private boolean isLiked = false;
@@ -151,6 +152,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
         seekBar = findViewById(R.id.seekBar);
         rootLayout = findViewById(R.id.rootLayout);
     }
+
     private void setupViewPager() {
         albumArtFragment = new AlbumArtFragment();
         lyricFragment = new LyricFragment();
@@ -169,8 +171,9 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
             }
         });
     }
+
     private void setupListeners() {
-        btnClose.setOnClickListener(v -> finish());
+        btnClose.setOnClickListener(v -> finishWithAnimation());
         btnPlayPause.setOnClickListener(v -> {
             if (serviceBound) {
                 if (musicService.isPlaying()) {
@@ -206,8 +209,231 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
             }
         });
 
+        // 点赞按钮事件
         btnLike.setOnClickListener(v -> toggleLike());
+
+        // 音乐列表按钮事件
+        btnPlaylist.setOnClickListener(v -> showPlaylistDialog());
     }
+
+    // 音乐列表弹窗
+    public void showPlaylistDialog() {
+        currentPlaylistDialog = MusicPlaylistDialog.newInstance();
+        currentPlaylistDialog.show(getSupportFragmentManager(), "MusicPlaylistDialog");
+    }
+
+    /**
+     * 实现OnPlaylistActionListener接口 - 从播放列表播放指定歌曲
+     */
+    @Override
+    public void onPlayMusicFromPlaylist(int position) {
+        playMusicFromPlaylist(position);
+    }
+
+    /**
+     * 实现OnPlaylistActionListener接口 - 播放列表变化处理
+     */
+    @Override
+    public void onPlaylistChanged() {
+        handlePlaylistChanged();
+    }
+
+    /**
+     * 实现OnPlaylistActionListener接口 - 播放模式变化处理
+     */
+    @Override
+    public void onPlayModeChanged(MusicPlayerService.PlayMode playMode) {
+        setPlayMode(playMode);
+    }
+
+    /**
+     * 实现OnPlaylistActionListener接口 - 获取当前播放模式
+     */
+    @Override
+    public MusicPlayerService.PlayMode getCurrentPlayMode() {
+        return currentPlayMode;
+    }
+
+    /**
+     * 从播放列表播放指定位置的歌曲
+     */
+    public void playMusicFromPlaylist(int position) {
+        if (!musicManager.isValidPosition(position)) {
+            Log.e(TAG, "playMusicFromPlaylist: 无效位置 " + position);
+            return;
+        }
+
+        MusicInfo musicInfo = musicManager.getMusicAt(position);
+        if (musicInfo == null) {
+            Log.e(TAG, "playMusicFromPlaylist: 位置 " + position + " 的音乐信息为null");
+            return;
+        }
+
+        Log.d(TAG, "从播放列表播放歌曲: " + musicInfo.getMusicName() + ", 位置: " + position);
+
+        // 更新MusicManager的当前位置
+        musicManager.setCurrentPosition(position);
+
+        // 更新界面
+        updateSongInfo(musicInfo);
+
+        // 通过Service播放
+        if (serviceBound) {
+            musicService.playAtPosition(position);
+        }
+    }
+
+    /**
+     * 处理播放列表变化
+     */
+    public void handlePlaylistChanged() {
+        Log.d(TAG, "处理播放列表变化");
+
+        // 如果播放列表为空，关闭Activity
+        if (musicManager.isPlaylistEmpty()) {
+            Log.d(TAG, "播放列表为空，关闭Activity");
+            finish();
+            return;
+        }
+
+        // 通知Service播放列表已更新
+        if (serviceBound) {
+            musicService.updatePlaylist(musicManager.getPlaylist());
+        }
+
+        // 获取当前音乐并更新界面
+        MusicInfo currentMusic = musicManager.getCurrentMusic();
+        if (currentMusic != null) {
+            updateSongInfo(currentMusic);
+        }
+
+        // 如果播放列表对话框还在显示，通知其更新
+        if (currentPlaylistDialog != null) {
+            currentPlaylistDialog.notifyPlaylistChanged();
+        }
+    }
+
+    /**
+     * 设置播放模式
+     */
+    public void setPlayMode(MusicPlayerService.PlayMode playMode) {
+        if (playMode != currentPlayMode) {
+            currentPlayMode = playMode;
+            updatePlayModeButton();
+
+            // 同步到Service
+            if (serviceBound) {
+                musicService.setPlayMode(playMode);
+            }
+
+            // 同步到对话框
+            if (currentPlaylistDialog != null) {
+                currentPlaylistDialog.updatePlayMode(playMode);
+            }
+
+            Log.d(TAG, "播放模式已设置为: " + currentPlayMode);
+        }
+    }
+
+    /**
+     * 更新播放模式按钮显示
+     */
+    private void updatePlayModeButton() {
+        switch (currentPlayMode) {
+            case SEQUENCE:
+                btnPlayMode.setImageResource(R.drawable.ic_repeat);
+                break;
+            case RANDOM:
+                btnPlayMode.setImageResource(R.drawable.ic_shuffle);
+                break;
+            case REPEAT_ONE:
+                btnPlayMode.setImageResource(R.drawable.ic_repeat_one);
+                break;
+        }
+    }
+
+    /**
+     * 执行退出动画并关闭Activity
+     */
+    private void finishWithAnimation() {
+        // 防止重复触发
+        if (isFinishing()) {
+            return;
+        }
+
+        // 获取屏幕高度
+        int screenHeight = getResources().getDisplayMetrics().heightPixels;
+
+        // 创建动画集合
+        AnimatorSet exitAnimatorSet = new AnimatorSet();
+
+        // 1. 向下滑动动画
+        ObjectAnimator slideDown = ObjectAnimator.ofFloat(
+                rootLayout,
+                "translationY",
+                0f,
+                screenHeight
+        );
+        slideDown.setDuration(400); // 400ms动画时长
+        slideDown.setInterpolator(new AccelerateInterpolator(1.5f)); // 加速效果
+
+        // 2. 渐隐动画
+        ObjectAnimator fadeOut = ObjectAnimator.ofFloat(
+                rootLayout,
+                "alpha",
+                1.0f,
+                0.0f
+        );
+        fadeOut.setDuration(300); // 300ms渐隐
+        fadeOut.setStartDelay(100); // 延迟100ms开始，让滑动先进行
+        fadeOut.setInterpolator(new AccelerateInterpolator());
+
+        // 3. 可选：添加缩放效果让动画更生动
+        ObjectAnimator scaleX = ObjectAnimator.ofFloat(
+                rootLayout,
+                "scaleX",
+                1.0f,
+                0.9f
+        );
+        scaleX.setDuration(400);
+        scaleX.setInterpolator(new AccelerateInterpolator());
+
+        ObjectAnimator scaleY = ObjectAnimator.ofFloat(
+                rootLayout,
+                "scaleY",
+                1.0f,
+                0.9f
+        );
+        scaleY.setDuration(400);
+        scaleY.setInterpolator(new AccelerateInterpolator());
+
+        // 组合所有动画
+        exitAnimatorSet.playTogether(slideDown, fadeOut, scaleX, scaleY);
+
+        // 动画结束后关闭Activity
+        exitAnimatorSet.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                // 确保在动画结束后调用finish()
+                finish();
+                // 禁用系统默认的Activity切换动画，因为我们已经有自定义动画
+                overridePendingTransition(0, 0);
+            }
+
+            @Override
+            public void onAnimationCancel(android.animation.Animator animation) {
+                // 如果动画被取消，也要确保Activity能正常关闭
+                finish();
+                overridePendingTransition(0, 0);
+            }
+        });
+
+        // 开始动画
+        exitAnimatorSet.start();
+
+        Log.d(TAG, "开始执行退出动画");
+    }
+
     /**
      * 切换点赞状态
      */
@@ -215,7 +441,6 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
         isLiked = !isLiked;
         updateLikeButton();
         playLikeAnimation();
-
 
         Log.d(TAG, "点赞状态: " + (isLiked ? "已收藏" : "已取消收藏"));
     }
@@ -308,11 +533,13 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
         animatorSet.play(scaleUpX).with(scaleUpY).after(scaleDownX);
         animatorSet.start();
     }
+
     private void bindMusicService() {
         Intent intent = new Intent(this, MusicPlayerService.class);
         bindService(intent, serviceConnection, BIND_AUTO_CREATE);
         startService(intent);
     }
+
     private ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
@@ -320,17 +547,23 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
             musicService = binder.getService();
             serviceBound = true;
             musicService.setOnPlaybackStateChangeListener(MusicPlayerActivity.this);
+
+            // 同步播放模式到Service
+            musicService.setPlayMode(currentPlayMode);
+
             Log.d(TAG, "Service已连接，当前位置: " + musicManager.getCurrentPosition());
             // 立即播放当前位置的音乐
             musicService.playAtPosition(musicManager.getCurrentPosition());
             startProgressUpdate();
         }
+
         @Override
         public void onServiceDisconnected(ComponentName name) {
             serviceBound = false;
             Log.d(TAG, "Service连接断开");
         }
     };
+
     private void updateSongInfo(MusicInfo musicInfo) {
         if (musicInfo == null) {
             Log.e(TAG, "updateSongInfo: musicInfo为null");
@@ -354,6 +587,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
         // 加载专辑封面并提取颜色
         loadAlbumArt(musicInfo.getCoverUrl());
     }
+
     private void loadAlbumArt(String coverUrl) {
         Glide.with(this)
                 .asBitmap()
@@ -369,6 +603,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
                     public void onLoadCleared(@Nullable Drawable placeholder) {}
                 });
     }
+
     /**
      * 从专辑封面提取颜色并应用到UI各组件
      */
@@ -381,6 +616,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
 
             // 提取主色调
             int dominantColor = palette.getDominantColor(0xFF424242);
+            currentDominantColor = dominantColor;
 
             // 获取暗色调和亮色调
             Palette.Swatch darkVibrantSwatch = palette.getDarkVibrantSwatch();
@@ -490,78 +726,35 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
     }
 
     private void playPrevious() {
-        List<MusicInfo> playlist = musicManager.getPlaylist();
-        if (playlist == null || playlist.isEmpty()) {
-            Log.w(TAG, "playPrevious: 播放列表为空");
-            return;
-        }
-        int currentPosition = musicManager.getCurrentPosition();
-        int newPosition;
-        switch (currentPlayMode) {
-            case SEQUENCE:
-            case REPEAT_ONE:
-                newPosition = (currentPosition - 1 + playlist.size()) % playlist.size();
-                break;
-            case RANDOM:
-                newPosition = (int) (Math.random() * playlist.size());
-                break;
-            default:
-                newPosition = (currentPosition - 1 + playlist.size()) % playlist.size();
-                break;
-        }
-        Log.d(TAG, "播放上一首: " + currentPosition + " -> " + newPosition);
-        musicManager.setCurrentPosition(newPosition);
-        updateSongInfo(playlist.get(newPosition));
         if (serviceBound) {
-            musicService.playAtPosition(newPosition);
+            musicService.playPrevious();
         }
     }
+
     private void playNext() {
-        List<MusicInfo> playlist = musicManager.getPlaylist();
-        if (playlist == null || playlist.isEmpty()) {
-            Log.w(TAG, "playNext: 播放列表为空");
-            return;
-        }
-        int currentPosition = musicManager.getCurrentPosition();
-        int newPosition;
-        switch (currentPlayMode) {
-            case SEQUENCE:
-                newPosition = (currentPosition + 1) % playlist.size();
-                break;
-            case REPEAT_ONE:
-                newPosition = currentPosition;
-                break;
-            case RANDOM:
-                newPosition = (int) (Math.random() * playlist.size());
-                break;
-            default:
-                newPosition = (currentPosition + 1) % playlist.size();
-                break;
-        }
-        Log.d(TAG, "播放下一首: " + currentPosition + " -> " + newPosition);
-        musicManager.setCurrentPosition(newPosition);
-        updateSongInfo(playlist.get(newPosition));
         if (serviceBound) {
-            musicService.playAtPosition(newPosition);
+            musicService.playNext();
         }
     }
+
     private void switchPlayMode() {
-        switch (currentPlayMode) {
-            case SEQUENCE:
-                currentPlayMode = PlayMode.RANDOM;
-                btnPlayMode.setImageResource(R.drawable.ic_shuffle);
+        // 循环切换播放模式
+        MusicPlayerService.PlayMode[] modes = MusicPlayerService.PlayMode.values();
+        int currentIndex = -1;
+
+        // 找到当前模式的索引
+        for (int i = 0; i < modes.length; i++) {
+            if (modes[i] == currentPlayMode) {
+                currentIndex = i;
                 break;
-            case RANDOM:
-                currentPlayMode = PlayMode.REPEAT_ONE;
-                btnPlayMode.setImageResource(R.drawable.ic_repeat_one);
-                break;
-            case REPEAT_ONE:
-                currentPlayMode = PlayMode.SEQUENCE;
-                btnPlayMode.setImageResource(R.drawable.ic_repeat);
-                break;
+            }
         }
-        Log.d(TAG, "切换播放模式: " + currentPlayMode);
+
+        // 切换到下一个模式
+        int nextIndex = (currentIndex + 1) % modes.length;
+        setPlayMode(modes[nextIndex]);
     }
+
     private void startProgressUpdate() {
         if (updateProgressRunnable != null) {
             handler.removeCallbacks(updateProgressRunnable);
@@ -587,12 +780,14 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
         };
         handler.post(updateProgressRunnable);
     }
+
     private String formatTime(int milliseconds) {
         int seconds = milliseconds / 1000;
         int minutes = seconds / 60;
         seconds = seconds % 60;
         return String.format("%02d:%02d", minutes, seconds);
     }
+
     @Override
     public void onPlaybackStateChanged(boolean isPlaying) {
         Log.d(TAG, "播放状态变化: " + isPlaying);
@@ -601,6 +796,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
             albumArtFragment.setRotationAnimation(isPlaying);
         }
     }
+
     @Override
     public void onSongChanged(int position) {
         Log.d(TAG, "歌曲变化回调: " + position);
@@ -610,6 +806,7 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
             updateSongInfo(playlist.get(position));
         }
     }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -621,19 +818,21 @@ public class MusicPlayerActivity extends AppCompatActivity implements MusicPlaye
             handler.removeCallbacks(updateProgressRunnable);
         }
     }
+
     private class ViewPagerAdapter extends FragmentStateAdapter {
         public ViewPagerAdapter(@NonNull FragmentActivity fragmentActivity) {
             super(fragmentActivity);
         }
+
         @NonNull
         @Override
         public Fragment createFragment(int position) {
             return position == 0 ? albumArtFragment : lyricFragment;
         }
+
         @Override
         public int getItemCount() {
             return 2;
         }
     }
 }
-

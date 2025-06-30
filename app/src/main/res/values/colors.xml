@@ -49,4 +49,27 @@
     <color name="like_color_active">#FF4081</color>
     <color name="like_color_inactive">#80FFFFFF</color>
 
+
+<!--    音乐列表项-->
+    <!-- 主要颜色 -->
+    <color name="colorAccent">#FF6B35</color>
+
+    <!-- 背景颜色 -->
+    <color name="background_dark">#121212</color>
+
+    <!-- 文本颜色 -->
+    <color name="white_alpha_50">#80FFFFFF</color>
+
+    <!-- 列表项背景 -->
+    <color name="item_pressed_background">#1AFFFFFF</color>
+
+    <!-- 删除按钮颜色 -->
+    <color name="delete_button_tint">#FF5252</color>
+    <color name="delete_button_pressed">#33FF5252</color>
+
+    <!-- 播放模式容器颜色 -->
+    <color name="play_mode_background">#1E1E1E</color>
+    <color name="play_mode_border">#333333</color>
+    <color name="play_mode_pressed">#2A2A2A</color>
+
 </resources>

@@ -28,4 +28,14 @@
     <string name="home_title1">专属好歌</string>
     <string name="home_title2">每日推荐</string>
     <string name="home_title3">热门金曲</string>
+
+    <!-- 播放列表相关 -->
+    <string name="current_playing_count">当前播放%d</string>
+    <string name="delete_from_playlist">从播放列表中删除</string>
+    <string name="play_mode_icon">播放模式图标</string>
+
+    <!-- 播放模式 -->
+    <string name="play_mode_sequence">顺序播放</string>
+    <string name="play_mode_shuffle">随机播放</string>
+    <string name="play_mode_repeat_one">单曲循环</string>
 </resources>

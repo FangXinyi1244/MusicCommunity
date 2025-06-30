@@ -2,7 +2,7 @@ package com.qzz.musiccommunity.model;
 
 import com.qzz.musiccommunity.model.iface.ListItem;
 import com.qzz.musiccommunity.network.dto.ModuleConfig;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 
 import java.util.List;
 

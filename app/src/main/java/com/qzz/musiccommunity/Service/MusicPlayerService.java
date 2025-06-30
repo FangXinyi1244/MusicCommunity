@@ -15,7 +15,7 @@ import androidx.core.app.NotificationCompat;
 
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.instance.MusicManager;
-import com.qzz.musiccommunity.network.dto.MusicInfo;
+import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.MusicPlayerActivity;
 
 import java.io.IOException;
@@ -28,10 +28,18 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
     private static final String CHANNEL_ID = "MusicPlayerChannel";
     private static final int NOTIFICATION_ID = 1;
 
+    // 播放模式枚举
+    public enum PlayMode {
+        SEQUENCE,    // 顺序播放
+        RANDOM,      // 随机播放
+        REPEAT_ONE   // 单曲循环
+    }
+
     private MediaPlayer mediaPlayer;
     private boolean isPrepared = false;
 
     private MusicManager musicManager;
+    private PlayMode currentPlayMode = PlayMode.SEQUENCE;
 
     private OnPlaybackStateChangeListener playbackStateChangeListener;
 
@@ -90,6 +98,49 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         mediaPlayer.setOnErrorListener(this);
     }
 
+    /**
+     * 更新播放列表
+     * @param newPlaylist 新的播放列表
+     */
+    public void updatePlaylist(List<MusicInfo> newPlaylist) {
+        Log.d(TAG, "Service播放列表已更新，歌曲数量: " + (newPlaylist != null ? newPlaylist.size() : 0));
+
+        // 如果播放列表为空，停止播放
+        if (newPlaylist == null || newPlaylist.isEmpty()) {
+            stop();
+            return;
+        }
+
+        // 检查当前播放位置是否仍然有效
+        int currentPosition = musicManager.getCurrentPosition();
+        if (currentPosition >= newPlaylist.size()) {
+            // 当前位置超出范围，调整到最后一首
+            int newPosition = newPlaylist.size() - 1;
+            musicManager.setCurrentPosition(newPosition);
+
+            // 切换到新歌曲
+            playAtPosition(newPosition);
+        }
+        // 如果当前位置仍有效，继续播放当前歌曲
+    }
+
+    /**
+     * 设置播放模式
+     * @param playMode 播放模式
+     */
+    public void setPlayMode(PlayMode playMode) {
+        this.currentPlayMode = playMode;
+        Log.d(TAG, "Service播放模式已更新: " + playMode);
+    }
+
+    /**
+     * 获取当前播放模式
+     * @return 当前播放模式
+     */
+    public PlayMode getPlayMode() {
+        return currentPlayMode;
+    }
+
     public void playAtPosition(int position) {
         List<MusicInfo> playlist = musicManager.getPlaylist();
 
@@ -146,7 +197,10 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
 
     public void stop() {
         if (mediaPlayer != null) {
-            mediaPlayer.stop();
+            if (mediaPlayer.isPlaying()) {
+                mediaPlayer.stop();
+            }
+            isPrepared = false;
             stopForeground(true);
 
             if (playbackStateChangeListener != null) {
@@ -189,41 +243,114 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
     @Override
     public void onCompletion(MediaPlayer mp) {
         Log.d(TAG, "当前歌曲播放完成");
-        playNext();
+        playNextBasedOnMode();
     }
 
     @Override
     public boolean onError(MediaPlayer mp, int what, int extra) {
         Log.e(TAG, "播放错误: what=" + what + ", extra=" + extra);
         isPrepared = false;
-        playNext();
+        playNextBasedOnMode();
         return true;
     }
 
+    /**
+     * 根据播放模式播放下一首
+     */
+    private void playNextBasedOnMode() {
+        List<MusicInfo> playlist = musicManager.getPlaylist();
+        if (playlist == null || playlist.isEmpty()) {
+            Log.d(TAG, "无法播放下一首：播放列表为空");
+            return;
+        }
+
+        int currentPosition = musicManager.getCurrentPosition();
+        int nextPosition = getNextPosition(currentPosition, playlist.size());
+
+        Log.d(TAG, "根据播放模式(" + currentPlayMode + ")播放下一首: " + currentPosition + " -> " + nextPosition);
+        playAtPosition(nextPosition);
+    }
+
+    /**
+     * 播放下一首（手动切换）
+     */
     public void playNext() {
         List<MusicInfo> playlist = musicManager.getPlaylist();
-        int currentPosition = musicManager.getCurrentPosition();
-
-        if (playlist != null && !playlist.isEmpty()) {
-            int nextPosition = (currentPosition + 1) % playlist.size();
-            Log.d(TAG, "播放下一首，当前位置: " + currentPosition + " -> 下一位置: " + nextPosition);
-            playAtPosition(nextPosition);
-        } else {
+        if (playlist == null || playlist.isEmpty()) {
             Log.d(TAG, "无法播放下一首：播放列表为空");
+            return;
+        }
+
+        int currentPosition = musicManager.getCurrentPosition();
+        int nextPosition;
+
+        // 手动切换时，即使是单曲循环模式也要切换到下一首
+        if (currentPlayMode == PlayMode.RANDOM) {
+            nextPosition = getRandomPosition(playlist.size());
+        } else {
+            nextPosition = (currentPosition + 1) % playlist.size();
+        }
+
+        Log.d(TAG, "手动播放下一首: " + currentPosition + " -> " + nextPosition);
+        playAtPosition(nextPosition);
+    }
+
+    /**
+     * 播放上一首
+     */
+    public void playPrevious() {
+        List<MusicInfo> playlist = musicManager.getPlaylist();
+        if (playlist == null || playlist.isEmpty()) {
+            Log.d(TAG, "无法播放上一首：播放列表为空");
+            return;
+        }
+
+        int currentPosition = musicManager.getCurrentPosition();
+        int prevPosition;
+
+        if (currentPlayMode == PlayMode.RANDOM) {
+            prevPosition = getRandomPosition(playlist.size());
+        } else {
+            prevPosition = (currentPosition - 1 + playlist.size()) % playlist.size();
+        }
+
+        Log.d(TAG, "播放上一首: " + currentPosition + " -> " + prevPosition);
+        playAtPosition(prevPosition);
+    }
+
+    /**
+     * 根据当前播放模式获取下一首歌曲的位置
+     */
+    private int getNextPosition(int currentPosition, int playlistSize) {
+        switch (currentPlayMode) {
+            case SEQUENCE:
+                return (currentPosition + 1) % playlistSize;
+            case RANDOM:
+                return getRandomPosition(playlistSize);
+            case REPEAT_ONE:
+                return currentPosition; // 单曲循环，继续播放当前歌曲
+            default:
+                return (currentPosition + 1) % playlistSize;
         }
     }
 
-    public void playPrevious() {
-        List<MusicInfo> playlist = musicManager.getPlaylist();
-        int currentPosition = musicManager.getCurrentPosition();
-
-        if (playlist != null && !playlist.isEmpty()) {
-            int prevPosition = (currentPosition - 1 + playlist.size()) % playlist.size();
-            Log.d(TAG, "播放上一首，当前位置: " + currentPosition + " -> 上一位置: " + prevPosition);
-            playAtPosition(prevPosition);
-        } else {
-            Log.d(TAG, "无法播放上一首：播放列表为空");
+    /**
+     * 获取随机位置
+     */
+    private int getRandomPosition(int playlistSize) {
+        if (playlistSize <= 1) {
+            return 0;
         }
+
+        int currentPosition = musicManager.getCurrentPosition();
+        int randomPosition;
+
+        // 确保随机位置不是当前位置（避免连续播放同一首歌）
+        do {
+            randomPosition = (int) (Math.random() * playlistSize);
+        } while (randomPosition == currentPosition && playlistSize > 1);
+
+        return randomPosition;
     }
 
     private Notification createNotification() {
@@ -266,4 +393,3 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         stopForeground(true);
     }
 }
-
