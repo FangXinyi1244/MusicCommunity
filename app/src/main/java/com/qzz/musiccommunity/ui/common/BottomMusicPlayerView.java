@@ -15,6 +15,7 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.resource.bitmap.CircleCrop;
 import com.bumptech.glide.request.RequestOptions;
 import com.qzz.musiccommunity.R;
 import com.qzz.musiccommunity.Service.MusicPlayerService;
@@ -244,6 +245,7 @@ public class BottomMusicPlayerView extends FrameLayout {
             tvSongName.setText(currentMusic.getMusicName());
             tvArtistName.setText(currentMusic.getAuthor());
             RequestOptions options = new RequestOptions()
+                    .transform(new CircleCrop())
                     .placeholder(R.drawable.default_album_art)
                     .error(R.drawable.default_album_art);
             Glide.with(getContext())

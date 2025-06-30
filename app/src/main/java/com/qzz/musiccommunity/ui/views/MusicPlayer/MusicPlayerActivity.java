@@ -784,6 +784,7 @@ public class MusicPlayerActivity extends AppCompatActivity
 
     private void toggleLike() {
         isLiked = !isLiked;
+        musicManager.setMusicLikedStatus(isLiked);
         updateLikeButton();
         playLikeAnimation();
         Log.d(TAG, "点赞状态: " + (isLiked ? "已收藏" : "已取消收藏"));

@@ -301,6 +301,11 @@ public class MusicManager {
         setPlaylist(allMusic);
         Log.d(TAG, "已从列表项收集 " + allMusic.size() + " 首歌曲");
     }
+
+    public void setMusicLikedStatus(boolean isLiked) {
+        musicDao.setMusicLikedStatus(getCurrentMusic().getId(), isLiked);
+        getCurrentMusic().setLiked(isLiked);
+    }
 }
 
 

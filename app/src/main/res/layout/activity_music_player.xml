@@ -53,46 +53,59 @@
             android:layout_width="match_parent"
             android:layout_height="38dp">
 
-            <!-- 歌曲名称 -->
-            <TextView
-                android:id="@+id/tvSongName"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:ellipsize="marquee"
-                android:focusable="true"
-                android:focusableInTouchMode="true"
-                android:marqueeRepeatLimit="marquee_forever"
-                android:scrollHorizontally="true"
-                android:singleLine="true"
-                android:text="歌曲名称"
-                android:textSize="16sp"
-                android:textAlignment="center"
-                android:gravity="center"
-                android:letterSpacing="0"
-                android:lineSpacingMultiplier="1.0"
-                android:textFontWeight="380"
-                android:fontFamily="@font/mi_sans_vf"
-                android:textStyle="normal"
+                android:orientation="vertical"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"/>
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
 
-            <!-- 歌手名称 -->
-            <TextView
-                android:id="@+id/tvArtistName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="歌手名称"
-                android:textSize="12sp"
-                android:textAlignment="center"
-                android:gravity="center"
-                android:letterSpacing="0"
-                android:lineSpacingMultiplier="1.0"
-                android:textFontWeight="330"
-                android:fontFamily="@font/mi_sans_vf"
-                android:textStyle="normal"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="@+id/tvSongName"
-                app:layout_constraintEnd_toEndOf="@+id/tvSongName"/>
+                <!-- 专辑图片 -->
+                <!-- 歌曲名称 -->
+                <TextView
+                    android:id="@+id/tvSongName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:ellipsize="marquee"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:marqueeRepeatLimit="marquee_forever"
+                    android:scrollHorizontally="true"
+                    android:singleLine="true"
+                    android:text="歌曲名称"
+                    android:textSize="16sp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    android:letterSpacing="0"
+                    android:lineSpacingMultiplier="1.0"
+                    android:textFontWeight="380"
+                    android:fontFamily="@font/mi_sans_vf"
+                    android:textStyle="normal"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"/>
+
+                <!-- 歌手名称 -->
+                <TextView
+                    android:id="@+id/tvArtistName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:text="歌手名称"
+                    android:textSize="12sp"
+                    android:textAlignment="center"
+                    android:gravity="center"
+                    android:letterSpacing="0"
+                    android:lineSpacingMultiplier="1.0"
+                    android:textFontWeight="330"
+                    android:fontFamily="@font/mi_sans_vf"
+                    android:textStyle="normal"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="@+id/tvSongName"
+                    app:layout_constraintEnd_toEndOf="@+id/tvSongName"/>
+            </LinearLayout>
+
 
 
             <!-- 点赞按钮 -->

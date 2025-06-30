@@ -1,5 +1,7 @@
 package com.qzz.musiccommunity.ui.views.MusicPlayer.fragment;
 
+import static android.content.ContentValues.TAG;
+
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -250,34 +252,56 @@ public class LyricFragment extends Fragment implements ColorAwareComponent {
     }
 
     private String downloadLyric(String lyricUrl) throws IOException {
-        // 保持不变
-        URL url = new URL(lyricUrl);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-        connection.setConnectTimeout(5000);
-        connection.setReadTimeout(5000);
-
-        InputStream inputStream = connection.getInputStream();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
-
-        StringBuilder content = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            content.append(line).append("\n");
-        }
-
-        reader.close();
-        inputStream.close();
-        connection.disconnect();
-
-        return content.toString();
+        return downloadLyricWithRetry(lyricUrl, 0);
     }
+
+    private String downloadLyricWithRetry(String lyricUrl, int retryCount) throws IOException {
+        try {
+            URL url = new URL(lyricUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+
+            InputStream inputStream = connection.getInputStream();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
+
+            StringBuilder content = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                content.append(line).append("\n");
+            }
+
+            reader.close();
+            inputStream.close();
+            connection.disconnect();
+
+            return content.toString();
+
+        } catch (IOException e) {
+            if (retryCount < 3) {
+                Log.w(TAG, "歌词下载失败，正在重试: " + (retryCount + 1) + "/3 - " + e.getMessage());
+                try {
+                    // 延迟1秒后重试
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("重试过程被中断", ie);
+                }
+                return downloadLyricWithRetry(lyricUrl, retryCount + 1);
+            } else {
+                Log.e(TAG, "歌词下载失败，已重试3次: " + e.getMessage());
+                throw e; // 重试3次后仍失败，抛出原始异常
+            }
+        }
+    }
+
 
     private List<LyricLine> parseLyric(String lyricContent) {
         // 保持不变
         List<LyricLine> lyrics = new ArrayList<>();
 
-        Pattern pattern = Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2})\\](.*)");
+        Pattern pattern = Pattern.compile("\\[(\\d{2}):(\\d{2})\\.(\\d{2,3})\\](.*)");
         String[] lines = lyricContent.split("\n");
 
         for (String line : lines) {
