@@ -101,7 +101,6 @@ com.qzz.musiccommunity/
 ├── instance/    # 单例管理，如 MusicManager
 ├── model/       # 数据模型层，与网络请求或业务逻辑相关的数据结构
 ├── network/     # 网络请求相关，如 API 接口定义、Retrofit 配置等
-├── res/         # 资源文件，如布局、图片、字符串、样式等
 └── ui/          # 用户界面层，包含 Activity, Fragment, Adapter, ViewModel 等
     ├── views/   # 各个功能模块的 Activity/Fragment
     │   ├── home/        # 主页相关 UI
@@ -127,8 +126,8 @@ com.qzz.musiccommunity/
 
 ## 待完善和可扩展点
 
-- **网络请求框架**: `network` 包目前可能只包含接口定义，实际的网络请求（如使用 Retrofit + OkHttp）的实现细节待补充。
-- **图片加载**: 对于音乐封面等图片，可集成 Glide 或 Picasso 等图片加载库，优化图片显示和缓存。
+- **网络请求框架**: `network` 包目前采用基础的Retrofit + OkHttp进行网络访问请求，需要考虑数据转换增强、过滤器等配置。
+- **图片加载**: 对于音乐封面等图片，需要频繁使用Glid进行网络请求（虽然Glid有缓存优化），可以进行部分本地缓存服务。
 - **歌词显示**: `MusicInfo` 中包含 `lyricUrl` 字段，可以进一步实现歌词的解析和同步显示功能。
 - **用户认证与社区功能**: 目前项目主要聚焦音乐播放，未来可扩展用户注册登录、评论、分享、关注等社区互动功能。
 - **UI/UX 优化**: 进一步优化界面设计和用户交互，提升整体美观度和易用性。
