@@ -58,15 +58,29 @@
     <com.scwang.smart.refresh.layout.SmartRefreshLayout
         android:id="@+id/swipe_refresh_layout"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         app:layout_constraintTop_toBottomOf="@+id/search_bar"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/stub_bottom_player"
         >
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recycler_view_swipe"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
     </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+
+    <ViewStub
+        android:id="@+id/stub_bottom_player"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:inflatedId="@+id/bottom_player_container"
+        android:layout="@layout/view_stub_player"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

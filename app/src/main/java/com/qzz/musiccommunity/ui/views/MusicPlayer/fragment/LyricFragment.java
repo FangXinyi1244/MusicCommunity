@@ -72,6 +72,21 @@ public class LyricFragment extends Fragment implements ColorAwareComponent {
         updateLyricsColor(); // 立即更新颜色
     }
 
+    @Override
+    public void updateColors(int backgroundColor, int textColor) {
+        this.backgroundColor = backgroundColor;
+
+        // 判断是否为深色背景
+        float[] hsl = new float[3];
+        ColorUtils.colorToHSL(backgroundColor, hsl);
+        setIsDarkBackground(hsl[2] < 0.5f);
+
+        // 更新所有歌词的颜色
+        if (getActivity() != null && !getActivity().isFinishing()) {
+            getActivity().runOnUiThread(this::updateLyricsColor);
+        }
+    }
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {

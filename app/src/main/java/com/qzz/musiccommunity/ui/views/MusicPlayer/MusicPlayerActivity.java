@@ -78,61 +78,21 @@ public class MusicPlayerActivity extends AppCompatActivity
         setContentView(R.layout.activity_music_player);
 
         // 初始化MusicManager
-        musicManager = MusicManager.getInstance();
+        musicManager = MusicManager.getInstance(this);
 
         initViews();
         setupViewPager();
         setupListeners();
 
-        // 从Intent中获取传递的数据
-        Bundle extras = getIntent().getExtras();
-        MusicInfo musicInfo = null;
-
-        if (extras != null) {
-            // 获取当前要播放的音乐信息
-            musicInfo = extras.getParcelable("MUSIC_INFO");
-
-            // 可选：获取完整音乐列表
-            ArrayList<MusicInfo> allMusicList = extras.getParcelableArrayList("ALL_MUSIC_LIST");
-            if (allMusicList != null && !allMusicList.isEmpty()) {
-                Log.d(TAG, "接收到完整音乐列表，包含 " + allMusicList.size() + " 首歌曲");
-                // 可以选择将完整列表添加到MusicManager中作为候选歌曲
-                // musicManager.addCandidateSongs(allMusicList);
-            }
-
-            // 可选：获取其他元数据
-            String sourceActivity = extras.getString("SOURCE_ACTIVITY");
-            long clickTime = extras.getLong("CLICK_TIME");
-            Log.d(TAG, "音乐来源: " + sourceActivity + ", 点击时间: " + clickTime);
-        }
-
-        if (musicInfo != null) {
-            // 将当前歌曲添加到播放列表开头，并重新排列
-            musicManager.addAndReorderPlaylist(musicInfo);
-
-            // 更新界面显示
-            updateSongInfo(musicInfo);
-
-            // 绑定并启动服务
+        // 从MusicManager获取当前播放状态和信息
+        MusicInfo currentMusic = musicManager.getCurrentMusic();
+        if (currentMusic != null) {
+            updateSongInfo(currentMusic);
             bindMusicService();
-
-            Log.d(TAG, "成功接收并添加音乐: " + musicInfo.getMusicName());
+            Log.d(TAG, "从MusicManager恢复播放现有音乐: " + currentMusic.getMusicName());
         } else {
-            // 如果没有传入新的音乐信息，检查是否有现有的播放列表
-            if (!musicManager.isPlaylistEmpty()) {
-                MusicInfo currentMusic = musicManager.getCurrentMusic();
-                if (currentMusic != null) {
-                    updateSongInfo(currentMusic);
-                    bindMusicService();
-                    Log.d(TAG, "恢复播放现有音乐: " + currentMusic.getMusicName());
-                } else {
-                    Log.e(TAG, "播放列表不为空但获取当前音乐失败");
-                    finish();
-                }
-            } else {
-                Log.e(TAG, "未传入音乐信息且播放列表为空，无法初始化播放器");
-                finish();
-            }
+            Log.e(TAG, "MusicManager中没有当前播放音乐信息，无法初始化播放器");
+            finish(); // 如果没有音乐信息，则关闭Activity
         }
     }
 
@@ -222,6 +182,8 @@ public class MusicPlayerActivity extends AppCompatActivity
         currentPlaylistDialog.show(getSupportFragmentManager(), "MusicPlaylistDialog");
     }
 
+
+
     /**
      * 实现OnPlaylistActionListener接口 - 从播放列表播放指定歌曲
      */
@@ -245,6 +207,25 @@ public class MusicPlayerActivity extends AppCompatActivity
     public void onPlayModeChanged(MusicPlayerService.PlayMode playMode) {
         setPlayMode(playMode);
     }
+
+    /**
+     * 实现OnPlaybackStateChangeListener接口 - 歌曲改变
+     * 注意：这个方法接收位置参数，而不是MusicInfo对象
+     */
+    @Override
+    public void onSongChanged(int position) {
+        // 从播放列表获取相应位置的音乐信息
+        MusicInfo musicInfo = musicManager.getMusicAt(position);
+        if (musicInfo != null) {
+            // 更新当前歌曲UI
+            updateSongInfo(musicInfo);
+            // 同步MusicManager的当前位置
+            musicManager.setCurrentPosition(position);
+        } else {
+            Log.e(TAG, "onSongChanged: 位置 " + position + " 的音乐信息为null");
+        }
+    }
+
 
     /**
      * 实现OnPlaylistActionListener接口 - 获取当前播放模式
@@ -349,6 +330,17 @@ public class MusicPlayerActivity extends AppCompatActivity
             case REPEAT_ONE:
                 btnPlayMode.setImageResource(R.drawable.ic_repeat_one);
                 break;
+        }
+    }
+
+    /**
+     * 更新进度
+     */
+    private void updateProgress() {
+        if (serviceBound && musicService != null) {
+            int current = musicService.getCurrentPosition();
+            int duration = musicService.getDuration();
+            onProgressChanged(current, duration);
         }
     }
 
@@ -492,23 +484,24 @@ public class MusicPlayerActivity extends AppCompatActivity
         scaleUpX.setInterpolator(new AccelerateInterpolator());
         scaleUpY.setInterpolator(new AccelerateInterpolator());
 
-        // 第二阶段：回弹缩小
+        // 第二阶段：回弹
         ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(btnLike, "scaleX", 1.3f, 1.0f);
         ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(btnLike, "scaleY", 1.3f, 1.0f);
-        scaleDownX.setDuration(200);
-        scaleDownY.setDuration(200);
+        scaleDownX.setDuration(150);
+        scaleDownY.setDuration(150);
         scaleDownX.setInterpolator(new OvershootInterpolator());
         scaleDownY.setInterpolator(new OvershootInterpolator());
 
         // 旋转动画
         ObjectAnimator rotation = ObjectAnimator.ofFloat(btnLike, "rotation", 0f, 360f);
-        rotation.setDuration(350);
+        rotation.setDuration(300);
         rotation.setInterpolator(new DecelerateInterpolator());
 
         // 组合动画
-        animatorSet.play(scaleUpX).with(scaleUpY);
-        animatorSet.play(scaleDownX).with(scaleDownY).after(scaleUpX);
-        animatorSet.play(rotation).with(scaleUpX);
+        animatorSet.playSequentially(scaleUpX, scaleDownX);
+        animatorSet.play(scaleUpY).with(scaleUpX);
+        animatorSet.play(scaleDownY).with(scaleDownX);
+        animatorSet.play(rotation).after(scaleUpX); // 旋转在放大后开始
 
         animatorSet.start();
     }
@@ -517,212 +510,249 @@ public class MusicPlayerActivity extends AppCompatActivity
      * 取消点赞动画
      */
     private void playUnlikeAnimation() {
-        AnimatorSet animatorSet = new AnimatorSet();
-
-        ObjectAnimator scaleDownX = ObjectAnimator.ofFloat(btnLike, "scaleX", 1.0f, 0.8f);
-        ObjectAnimator scaleDownY = ObjectAnimator.ofFloat(btnLike, "scaleY", 1.0f, 0.8f);
-        ObjectAnimator scaleUpX = ObjectAnimator.ofFloat(btnLike, "scaleX", 0.8f, 1.0f);
-        ObjectAnimator scaleUpY = ObjectAnimator.ofFloat(btnLike, "scaleY", 0.8f, 1.0f);
-
-        scaleDownX.setDuration(100);
-        scaleDownY.setDuration(100);
-        scaleUpX.setDuration(150);
-        scaleUpY.setDuration(150);
-
-        animatorSet.play(scaleDownX).with(scaleDownY);
-        animatorSet.play(scaleUpX).with(scaleUpY).after(scaleDownX);
-        animatorSet.start();
+        likeAnimator = ValueAnimator.ofFloat(1f, 0.8f, 1f);
+        likeAnimator.setDuration(300);
+        likeAnimator.addUpdateListener(animation -> {
+            float scale = (float) animation.getAnimatedValue();
+            btnLike.setScaleX(scale);
+            btnLike.setScaleY(scale);
+        });
+        likeAnimator.start();
     }
 
-    private void bindMusicService() {
-        Intent intent = new Intent(this, MusicPlayerService.class);
-        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
-        startService(intent);
-    }
-
+    /**
+     * ServiceConnection，正确设置监听器
+     */
     private ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             MusicPlayerService.MusicBinder binder = (MusicPlayerService.MusicBinder) service;
             musicService = binder.getService();
             serviceBound = true;
+
+            // 设置回调监听器
             musicService.setOnPlaybackStateChangeListener(MusicPlayerActivity.this);
 
-            // 同步播放模式到Service
+            Log.d(TAG, "服务已绑定");
+            // 确保服务中的播放列表与MusicManager同步
+            musicService.updatePlaylist(musicManager.getPlaylist());
+            musicService.setCurrentPosition(musicManager.getCurrentPosition());
+
+            // 同步播放模式
             musicService.setPlayMode(currentPlayMode);
+            // 如果服务没有在播放，则开始播放当前音乐
+            if (!musicService.isPlaying() && musicManager.getCurrentMusic() != null) {
+                musicService.play();
+            }
 
-            Log.d(TAG, "Service已连接，当前位置: " + musicManager.getCurrentPosition());
-            // 立即播放当前位置的音乐
-            musicService.playAtPosition(musicManager.getCurrentPosition());
-            startProgressUpdate();
+            // 更新UI状态
+            updatePlaybackState(musicService.isPlaying());
+            updateProgress();
+            updatePlayModeButton();
         }
-
         @Override
         public void onServiceDisconnected(ComponentName name) {
             serviceBound = false;
-            Log.d(TAG, "Service连接断开");
+            Log.d(TAG, "服务已断开");
         }
     };
 
+    private void bindMusicService() {
+        Intent intent = new Intent(this, MusicPlayerService.class);
+        // 启动服务，确保服务在后台运行
+        startService(intent);
+        // 绑定服务，以便Activity可以与服务通信
+        bindService(intent, serviceConnection, BIND_AUTO_CREATE);
+        Log.d(TAG, "尝试绑定音乐服务");
+    }
+
+    private void unbindMusicService() {
+        if (serviceBound) {
+            unbindService(serviceConnection);
+            serviceBound = false;
+            Log.d(TAG, "服务已解绑");
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unbindMusicService();
+        handler.removeCallbacks(updateProgressRunnable);
+        Log.d(TAG, "Activity销毁");
+    }
+
     private void updateSongInfo(MusicInfo musicInfo) {
         if (musicInfo == null) {
-            Log.e(TAG, "updateSongInfo: musicInfo为null");
+            Log.e(TAG, "updateSongInfo: musicInfo is null");
             return;
         }
-        Log.d(TAG, "更新歌曲信息: " + musicInfo.getMusicName());
         tvSongName.setText(musicInfo.getMusicName());
         tvArtistName.setText(musicInfo.getAuthor());
 
-        // 先加载歌词，后加载专辑封面
-        // 这样可以确保歌词内容已经准备好，再进行颜色调整
-        handler.post(() -> {
-            if (lyricFragment != null) {
-                lyricFragment.updateLyric(musicInfo.getLyricUrl());
-            }
-            if (albumArtFragment != null) {
-                albumArtFragment.updateAlbumArt(musicInfo.getCoverUrl());
-            }
-        });
-
-        // 加载专辑封面并提取颜色
-        loadAlbumArt(musicInfo.getCoverUrl());
-    }
-
-    private void loadAlbumArt(String coverUrl) {
+        // 加载封面并提取颜色
         Glide.with(this)
                 .asBitmap()
-                .load(coverUrl)
+                .load(musicInfo.getCoverUrl())
                 .into(new CustomTarget<Bitmap>() {
                     @Override
                     public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
-                        // 使用Palette提取颜色并应用到UI
-                        extractColorsAndApply(resource);
+                        if (albumArtFragment != null) {
+                            albumArtFragment.setAlbumArt(resource);
+                        }
+                        extractColorFromBitmap(resource);
                     }
 
                     @Override
-                    public void onLoadCleared(@Nullable Drawable placeholder) {}
+                    public void onLoadCleared(@Nullable Drawable placeholder) {
+                        if (albumArtFragment != null) {
+                            albumArtFragment.setAlbumArt(null);
+                        }
+                    }
                 });
+
+        // 更新歌词Fragment
+        if (lyricFragment != null) {
+            lyricFragment.updateLyric(musicInfo.getLyricUrl());
+        }
+
+        // 更新点赞状态
+        // isLiked = musicManager.getMusicDao().getMusicLikedStatus(musicInfo.getId()); // 需要MusicDao实例
+        // updateLikeButton();
     }
 
-    /**
-     * 从专辑封面提取颜色并应用到UI各组件
-     */
-    private void extractColorsAndApply(Bitmap albumArt) {
-        Palette.from(albumArt).generate(palette -> {
-            if (palette == null) {
-                Log.w(TAG, "无法从专辑封面提取颜色");
-                return;
+    private void extractColorFromBitmap(Bitmap bitmap) {
+        Palette.from(bitmap).generate(palette -> {
+            if (palette != null) {
+                int defaultColor = Color.parseColor("#424242"); // 深灰色
+                currentDominantColor = palette.getDominantColor(defaultColor);
+                int mutedColor = palette.getMutedColor(defaultColor);
+                int vibrantColor = palette.getVibrantColor(defaultColor);
+
+                // 使用提取的颜色更新UI
+                updateUIColors(currentDominantColor);
             }
-
-            // 提取主色调
-            int dominantColor = palette.getDominantColor(0xFF424242);
-            currentDominantColor = dominantColor;
-
-            // 获取暗色调和亮色调
-            Palette.Swatch darkVibrantSwatch = palette.getDarkVibrantSwatch();
-            Palette.Swatch lightVibrantSwatch = palette.getLightVibrantSwatch();
-
-            // 分析颜色的亮度
-            float[] hsl = new float[3];
-            ColorUtils.colorToHSL(dominantColor, hsl);
-            boolean isDarkBackground = hsl[2] < 0.5f; // 亮度小于0.5认为是暗色
-
-            // 设置背景色
-            rootLayout.setBackgroundColor(dominantColor);
-
-            // 设置专辑名和艺术家名称的颜色 - 使用高对比度
-            int titleTextColor = getContrastColor(dominantColor, 1.0f);
-            tvSongName.setTextColor(titleTextColor);
-            tvArtistName.setTextColor(titleTextColor);
-
-            // 设置时间显示TextView的颜色 - 使用与歌词相同的半透明对比色
-            int timeTextColor = getContrastColor(dominantColor, 0.8f);
-            tvCurrentTime.setTextColor(timeTextColor);
-            tvTotalTime.setTextColor(timeTextColor);
-
-            // 通知歌词组件更新颜色
-            handler.post(() -> {
-                if (lyricFragment != null) {
-                    lyricFragment.setBackgroundColor(dominantColor);
-
-                    // 可选：记录当前背景是深色还是浅色，以便歌词组件进一步优化
-                    if (lyricFragment instanceof ColorAwareComponent) {
-                        ((ColorAwareComponent) lyricFragment).setIsDarkBackground(isDarkBackground);
-                    }
-                }
-            });
-
-            Log.d(TAG, "颜色提取完成 - 背景色: " + Integer.toHexString(dominantColor) +
-                    ", 是否深色背景: " + isDarkBackground);
         });
     }
 
-    /**
-     * 获取当前主题颜色（与歌词颜色保持一致）
-     */
-    private int getCurrentThemeColor() {
-        // 如果有当前提取的主题色，使用对比色
-        // 这里可以复用之前 extractColorsAndApply 中的逻辑
-        return getContrastColor(getCurrentDominantColor(), 0.8f);
+    private void updateUIColors(int color) {
+        // 设置背景颜色，可以根据需要调整透明度或饱和度
+        rootLayout.setBackgroundColor(color);
+
+        // 调整文本颜色以确保可读性
+        int textColor = getContrastColor(color);
+        tvSongName.setTextColor(textColor);
+        tvArtistName.setTextColor(textColor);
+        tvCurrentTime.setTextColor(textColor);
+        tvTotalTime.setTextColor(textColor);
+
+        // 更新按钮颜色
+        btnClose.setColorFilter(textColor);
+        btnPrevious.setColorFilter(textColor);
+        btnNext.setColorFilter(textColor);
+        btnPlayMode.setColorFilter(textColor);
+        btnPlaylist.setColorFilter(textColor);
+        // btnLike.setColorFilter(textColor); // 点赞按钮颜色单独处理
+
+        // 更新SeekBar颜色
+        seekBar.setProgressTintList(android.content.res.ColorStateList.valueOf(textColor));
+        seekBar.setThumbTintList(android.content.res.ColorStateList.valueOf(textColor));
+
+        // 通知Fragment更新颜色
+        if (albumArtFragment instanceof ColorAwareComponent) {
+            ((ColorAwareComponent) albumArtFragment).updateColors(color, textColor);
+        }
+        if (lyricFragment instanceof ColorAwareComponent) {
+            ((ColorAwareComponent) lyricFragment).updateColors(color, textColor);
+        }
     }
 
-    private int getCurrentDominantColor() {
-        return currentDominantColor;
+    private int getContrastColor(int color) {
+        // 根据背景色亮度选择黑色或白色作为对比色
+        return ColorUtils.calculateLuminance(color) > 0.5 ? Color.BLACK : Color.WHITE;
     }
 
-    /**
-     * 计算与背景色对比的文字颜色，与歌词Fragment使用相同的算法
-     * @param backgroundColor 背景颜色
-     * @param alpha 透明度 (0.0-1.0)
-     * @return 计算后的文字颜色
-     */
-    private int getContrastColor(int backgroundColor, float alpha) {
-        // 分析背景色亮度
-        float[] hsl = new float[3];
-        ColorUtils.colorToHSL(backgroundColor, hsl);
-        boolean isDarkBg = hsl[2] < 0.5f;
+    @Override
+    public void onPlaybackStateChanged(boolean isPlaying) {
+        updatePlaybackState(isPlaying);
+    }
 
-        // 基于背景色决定文字颜色
-        int textColor;
 
-        if (isDarkBg) {
-            // 深色背景使用高亮度文字
-            textColor = Color.rgb(
-                    Math.min(255, 255 - Color.red(backgroundColor) + 40),
-                    Math.min(255, 255 - Color.green(backgroundColor) + 40),
-                    Math.min(255, 255 - Color.blue(backgroundColor) + 40)
-            );
-        } else {
-            // 浅色背景使用低亮度文字
-            textColor = Color.rgb(
-                    Math.max(0, 255 - Color.red(backgroundColor) - 40),
-                    Math.max(0, 255 - Color.green(backgroundColor) - 40),
-                    Math.max(0, 255 - Color.blue(backgroundColor) - 40)
-            );
+    @Override
+    public void onProgressUpdate(int currentPosition, int totalDuration) {
+        onProgressChanged(currentPosition, totalDuration);
+    }
+//    @Override
+//    public void onMusicChanged(MusicInfo musicInfo) {
+//        updateSongInfo(musicInfo);
+//        // 更新MusicManager的当前播放位置
+//        musicManager.setCurrentPosition(musicManager.getPlaylist().indexOf(musicInfo));
+//    }
+
+
+//    进度条控制
+    public void onProgressChanged(int currentPosition, int totalDuration) {
+        tvCurrentTime.setText(formatTime(currentPosition));
+        tvTotalTime.setText(formatTime(totalDuration));
+        if (totalDuration > 0) {
+            seekBar.setProgress((int) (((float) currentPosition / totalDuration) * 100));
         }
 
-        // 确保WCAG AA级别对比度 (4.5:1)
-        double contrast = ColorUtils.calculateContrast(textColor, backgroundColor);
-        if (contrast < 4.5) {
-            if (isDarkBg) {
-                // 深色背景，提高文字亮度
-                textColor = Color.rgb(
-                        Math.min(255, Color.red(textColor) + 30),
-                        Math.min(255, Color.green(textColor) + 30),
-                        Math.min(255, Color.blue(textColor) + 30)
-                );
-            } else {
-                // 浅色背景，降低文字亮度
-                textColor = Color.rgb(
-                        Math.max(0, Color.red(textColor) - 30),
-                        Math.max(0, Color.green(textColor) - 30),
-                        Math.max(0, Color.blue(textColor) - 30)
-                );
+        if (lyricFragment != null) {
+            lyricFragment.updateProgress(currentPosition);
+        }
+    }
+
+    // 添加播放状态变化时的专辑封面动画控制
+    private void updatePlaybackState(boolean isPlaying) {
+        if (isPlaying) {
+            btnPlayPause.setImageResource(R.drawable.ic_pause);
+            startUpdatingProgress();
+
+            // 启动专辑旋转动画
+            if (albumArtFragment != null) {
+                albumArtFragment.setRotationAnimation(true);
+            }
+        } else {
+            btnPlayPause.setImageResource(R.drawable.ic_play);
+            stopUpdatingProgress();
+
+            // 暂停专辑旋转动画
+            if (albumArtFragment != null) {
+                albumArtFragment.setRotationAnimation(false);
             }
         }
+    }
 
-        // 应用透明度
-        return ColorUtils.setAlphaComponent(textColor, (int)(alpha * 255));
+
+
+    private void startUpdatingProgress() {
+        if (updateProgressRunnable == null) {
+            updateProgressRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    if (serviceBound && musicService.isPlaying()) {
+                        int current = musicService.getCurrentPosition();
+                        int duration = musicService.getDuration();
+                        onProgressChanged(current, duration);
+                    }
+                    handler.postDelayed(this, 1000); // 每秒更新一次
+                }
+            };
+        }
+        handler.post(updateProgressRunnable);
+    }
+
+    private void stopUpdatingProgress() {
+        if (updateProgressRunnable != null) {
+            handler.removeCallbacks(updateProgressRunnable);
+        }
+    }
+
+    private String formatTime(int milliseconds) {
+        int minutes = (milliseconds / 1000) / 60;
+        int seconds = (milliseconds / 1000) % 60;
+        return String.format("%02d:%02d", minutes, seconds);
     }
 
     private void playPrevious() {
@@ -737,11 +767,12 @@ public class MusicPlayerActivity extends AppCompatActivity
         }
     }
 
+    /**
+     * 切换播放模式
+     */
     private void switchPlayMode() {
-        // 循环切换播放模式
         MusicPlayerService.PlayMode[] modes = MusicPlayerService.PlayMode.values();
         int currentIndex = -1;
-
         // 找到当前模式的索引
         for (int i = 0; i < modes.length; i++) {
             if (modes[i] == currentPlayMode) {
@@ -749,74 +780,14 @@ public class MusicPlayerActivity extends AppCompatActivity
                 break;
             }
         }
-
         // 切换到下一个模式
         int nextIndex = (currentIndex + 1) % modes.length;
         setPlayMode(modes[nextIndex]);
     }
 
-    private void startProgressUpdate() {
-        if (updateProgressRunnable != null) {
-            handler.removeCallbacks(updateProgressRunnable);
-        }
-        updateProgressRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (serviceBound && musicService.isPlaying()) {
-                    int currentPosition = musicService.getCurrentPosition();
-                    int duration = musicService.getDuration();
-                    if (duration > 0) {
-                        int progress = (currentPosition * 100) / duration;
-                        seekBar.setProgress(progress);
-                        tvCurrentTime.setText(formatTime(currentPosition));
-                        tvTotalTime.setText(formatTime(duration));
-                        if (lyricFragment != null) {
-                            lyricFragment.updateProgress(currentPosition);
-                        }
-                    }
-                }
-                handler.postDelayed(this, 1000);
-            }
-        };
-        handler.post(updateProgressRunnable);
-    }
-
-    private String formatTime(int milliseconds) {
-        int seconds = milliseconds / 1000;
-        int minutes = seconds / 60;
-        seconds = seconds % 60;
-        return String.format("%02d:%02d", minutes, seconds);
-    }
-
-    @Override
-    public void onPlaybackStateChanged(boolean isPlaying) {
-        Log.d(TAG, "播放状态变化: " + isPlaying);
-        btnPlayPause.setImageResource(isPlaying ? R.drawable.ic_pause : R.drawable.ic_play);
-        if (albumArtFragment != null) {
-            albumArtFragment.setRotationAnimation(isPlaying);
-        }
-    }
-
-    @Override
-    public void onSongChanged(int position) {
-        Log.d(TAG, "歌曲变化回调: " + position);
-        musicManager.setCurrentPosition(position);
-        List<MusicInfo> playlist = musicManager.getPlaylist();
-        if (playlist != null && position < playlist.size()) {
-            updateSongInfo(playlist.get(position));
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        Log.d(TAG, "Activity销毁");
-        if (serviceBound) {
-            unbindService(serviceConnection);
-        }
-        if (updateProgressRunnable != null) {
-            handler.removeCallbacks(updateProgressRunnable);
-        }
+    private int getCurrentThemeColor() {
+        // 返回当前背景的主色调，用于点赞按钮未点赞时的颜色
+        return currentDominantColor;
     }
 
     private class ViewPagerAdapter extends FragmentStateAdapter {
@@ -827,7 +798,11 @@ public class MusicPlayerActivity extends AppCompatActivity
         @NonNull
         @Override
         public Fragment createFragment(int position) {
-            return position == 0 ? albumArtFragment : lyricFragment;
+            if (position == 0) {
+                return albumArtFragment;
+            } else {
+                return lyricFragment;
+            }
         }
 
         @Override
@@ -836,3 +811,5 @@ public class MusicPlayerActivity extends AppCompatActivity
         }
     }
 }
+
+

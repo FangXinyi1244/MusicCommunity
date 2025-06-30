@@ -24,6 +24,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MusicCommunity"
         tools:targetApi="31">
+
+        <!-- attributionTag -->
+        <meta-data
+            android:name="attributionTag"
+            android:value="your_attribution_tag_value" />
+
         <activity
             android:name=".ui.views.home.HomeActivity"
             android:exported="false"

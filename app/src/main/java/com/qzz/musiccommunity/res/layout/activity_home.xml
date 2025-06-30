@@ -1,0 +1,32 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ui.views.home.HomeActivity">
+
+    <com.scwang.smart.refresh.layout.SmartRefreshLayout
+        android:id="@+id/swipe_refresh_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/bottom_music_player_stub">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_view_swipe"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="vertical" />
+
+    </com.scwang.smart.refresh.layout.SmartRefreshLayout>
+
+    <ViewStub
+        android:id="@+id/bottom_music_player_stub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:inflatedId="@+id/bottom_music_player_container"
+        android:layout="@layout/view_bottom_music_player" />
+
+</RelativeLayout>
+
+

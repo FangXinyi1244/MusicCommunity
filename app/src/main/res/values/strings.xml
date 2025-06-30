@@ -38,4 +38,7 @@
     <string name="play_mode_sequence">顺序播放</string>
     <string name="play_mode_shuffle">随机播放</string>
     <string name="play_mode_repeat_one">单曲循环</string>
+    <string name="play_pause">播放悬浮窗播放按钮</string>
+    <string name="playlist">播放悬浮窗列表按钮</string>
+    <string name="album_art">播放悬浮窗专辑封面</string>
 </resources>

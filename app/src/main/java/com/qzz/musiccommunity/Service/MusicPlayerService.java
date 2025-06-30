@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.media.MediaPlayer;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
@@ -41,11 +42,28 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
     private MusicManager musicManager;
     private PlayMode currentPlayMode = PlayMode.SEQUENCE;
 
+    private Handler progressHandler = new Handler();
+    private Runnable progressUpdateRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (mediaPlayer != null && isPrepared && mediaPlayer.isPlaying()) {
+                int current = mediaPlayer.getCurrentPosition();
+                int duration = mediaPlayer.getDuration();
+
+                if (playbackStateChangeListener != null) {
+                    playbackStateChangeListener.onProgressUpdate(current, duration);
+                }
+            }
+            progressHandler.postDelayed(this, 1000); // 每秒更新
+        }
+    };
+
     private OnPlaybackStateChangeListener playbackStateChangeListener;
 
     public interface OnPlaybackStateChangeListener {
         void onPlaybackStateChanged(boolean isPlaying);
         void onSongChanged(int position);
+        void onProgressUpdate(int currentPosition, int totalDuration);
     }
 
     public class MusicBinder extends Binder {
@@ -63,7 +81,13 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         createNotificationChannel();
         initMediaPlayer();
 
-        musicManager = MusicManager.getInstance();
+        // 如果已经初始化过，直接获取实例
+        if (MusicManager.isInitialized()) {
+            musicManager = MusicManager.getInstance();
+        } else {
+            // 如果未初始化，传入context进行初始化
+            musicManager = MusicManager.getInstance(this);
+        }
     }
 
     @Override
@@ -96,6 +120,34 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         mediaPlayer.setOnPreparedListener(this);
         mediaPlayer.setOnCompletionListener(this);
         mediaPlayer.setOnErrorListener(this);
+    }
+
+    /**
+     * 设置当前播放位置
+     * @param position 要设置的播放位置
+     */
+    public void setCurrentPosition(int position) {
+        List<MusicInfo> playlist = musicManager.getPlaylist();
+
+        // 验证位置是否有效
+        if (playlist == null || playlist.isEmpty() || position < 0 || position >= playlist.size()) {
+            Log.e(TAG, "无法设置位置：无效的位置 " + position + " 或播放列表为空");
+            return;
+        }
+
+        // 如果位置相同且已经在播放，不执行任何操作
+        if (position == musicManager.getCurrentPosition() && isPrepared) {
+            Log.d(TAG, "位置未变，保持当前播放状态");
+            return;
+        }
+
+        Log.d(TAG, "设置当前播放位置为: " + position);
+
+        // 更新MusicManager中的位置
+        musicManager.setCurrentPosition(position);
+
+        // 开始播放新位置的歌曲
+        playAtPosition(position);
     }
 
     /**
@@ -187,6 +239,8 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         if (mediaPlayer != null && mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
             stopForeground(false);
+//            停止进度更新
+            progressHandler.removeCallbacks(progressUpdateRunnable);
 
             if (playbackStateChangeListener != null) {
                 playbackStateChangeListener.onPlaybackStateChanged(false);
@@ -238,6 +292,8 @@ public class MusicPlayerService extends Service implements MediaPlayer.OnPrepare
         isPrepared = true;
         Log.d(TAG, "媒体准备完成，开始播放");
         play();
+        // 启动进度更新
+        progressHandler.post(progressUpdateRunnable);
     }
 
     @Override

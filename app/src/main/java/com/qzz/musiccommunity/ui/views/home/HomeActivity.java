@@ -5,6 +5,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
+import android.view.ViewStub;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -26,6 +28,7 @@ import com.qzz.musiccommunity.network.dto.BaseResponse;
 import com.qzz.musiccommunity.network.dto.ModuleConfig;
 import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.network.dto.PagedData;
+import com.qzz.musiccommunity.ui.common.BottomMusicPlayerView;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.MusicPlayerActivity;
 import com.qzz.musiccommunity.ui.views.MusicPlayer.iface.OnMusicItemClickListener;
 import com.qzz.musiccommunity.ui.views.home.adapter.MultiTypeAdapter;
@@ -49,6 +52,11 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     private RecyclerView recyclerViewSwipe;
     private MultiTypeAdapter adapter;
     private SmartRefreshLayout swipeRefreshLayout;
+
+    // 底部播放器
+    private ViewStub stubBottomPlayer;
+    private BottomMusicPlayerView bottomMusicPlayerView;
+    private boolean isBottomPlayerInflated = false; // 标记ViewStub是否已经inflate
 
     // 网络和数据
     private ApiService apiService;
@@ -76,7 +84,6 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
             initializeComponents();
 
             // 延迟加载初始数据，确保UI完全初始化
-            // 修正1：初始加载应该按刷新处理
             mainHandler.postDelayed(() -> {
                 if (!isFinishing() && !isDestroyed()) {
                     Log.d(TAG, "开始初始数据加载（刷新模式）");
@@ -88,6 +95,22 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
             Log.e(TAG, "Activity初始化失败", e);
             showError("初始化失败，请重启应用");
         }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Log.d(TAG, "onStart - 检查并更新底部播放器显示状态");
+        // 修正2：从其他Activity返回时判断BottomMusicPlayerView显示
+        checkAndUpdateBottomPlayerVisibility();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.d(TAG, "onResume - 检查并更新底部播放器显示状态");
+        // 修正2：从其他Activity返回时判断BottomMusicPlayerView显示
+        checkAndUpdateBottomPlayerVisibility();
     }
 
     /**
@@ -111,6 +134,9 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         // 设置刷新布局
         setupRefreshLayout();
 
+        // 修正：初始化底部音乐播放器（但不立即显示）
+        initBottomMusicPlayerStub();
+
         Log.d(TAG, "组件初始化完成");
     }
 
@@ -121,6 +147,7 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         try {
             recyclerViewSwipe = findViewById(R.id.recycler_view_swipe);
             swipeRefreshLayout = findViewById(R.id.swipe_refresh_layout);
+            stubBottomPlayer = findViewById(R.id.stub_bottom_player);
 
             if (recyclerViewSwipe == null) {
                 throw new IllegalStateException("RecyclerView未找到，请检查布局文件");
@@ -335,7 +362,6 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         }
     }
 
-
     /**
      * 修正后的网络请求方法
      */
@@ -421,7 +447,6 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
         });
     }
 
-
     /**
      * 处理网络响应
      */
@@ -455,7 +480,7 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     }
 
     /**
-     * 修正2：处理成功的数据 - 完善逻辑
+     * 处理成功的数据
      */
     private void processSuccessfulData(List<ModuleConfig> moduleConfigs, PagedData<ModuleConfig> pagedData, boolean isRefresh) {
         try {
@@ -481,9 +506,6 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
             // 打印详细数据用于调试
             printDataDetails(currentData);
 
-            // 打印适配器状态
-            printAdapterState();
-
             // 检查是否还有更多数据
             checkNoMoreData(pagedData);
 
@@ -508,365 +530,220 @@ public class HomeActivity extends AppCompatActivity implements OnMusicItemClickL
     }
 
     /**
-     * 加载更多数据
+     * 辅助方法：完成刷新或加载更多状态
+     */
+    private void finishRefreshAndLoadMore() {
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.finishRefresh();
+            swipeRefreshLayout.finishLoadMore();
+        }
+    }
+
+    /**
+     * 辅助方法：加载更多数据
      */
     private void loadMoreData() {
-        if (isLoading) {
-            swipeRefreshLayout.finishLoadMore();
-            return;
-        }
-
         currentPage++;
-        Log.d(TAG, "准备加载第 " + currentPage + " 页数据");
         loadHomePageData(false);
     }
 
     /**
-     * 修正3：更新适配器 - 确保正确通知数据变化
+     * 辅助方法：更新适配器
      */
     private void updateAdapter() {
         if (adapter != null) {
-            Log.d(TAG, "更新适配器前 - ItemCount: " + adapter.getItemCount() + ", 数据大小: " + currentData.size());
-
-            adapter.setItems(currentData);
-
-            Log.d(TAG, "更新适配器后 - ItemCount: " + adapter.getItemCount() + ", 数据大小: " + currentData.size());
-
-            // 如果适配器的setItems方法没有自动调用notifyDataSetChanged，手动调用
-            // adapter.notifyDataSetChanged();
-        } else {
-            Log.e(TAG, "适配器为null，无法更新数据");
+            adapter.notifyDataSetChanged();
         }
     }
 
     /**
-     * 修正4：通知适配器新增数据 - 优化实现
+     * 辅助方法：通知适配器插入新项
      */
-    private void notifyAdapterItemsInserted(int positionStart, int itemCount) {
+    private void notifyAdapterItemsInserted(int startPosition, int itemCount) {
         if (adapter != null) {
-            Log.d(TAG, "通知适配器插入数据前 - ItemCount: " + adapter.getItemCount());
-
-            adapter.setItems(currentData);
-
-            // 推荐使用 notifyItemRangeInserted 而不是完全刷新
-            // 这样性能更好且动画效果更流畅
-            // adapter.notifyItemRangeInserted(positionStart, itemCount);
-
-            Log.d(TAG, "通知适配器插入数据后 - 位置: " + positionStart + ", 数量: " + itemCount + ", ItemCount: " + adapter.getItemCount());
-        } else {
-            Log.e(TAG, "适配器为null，无法插入数据");
+            adapter.notifyItemRangeInserted(startPosition, itemCount);
         }
     }
 
     /**
-     * 新增：打印适配器状态，用于调试
-     */
-    private void printAdapterState() {
-        if (adapter != null) {
-            Log.d(TAG, "========适配器状态========");
-            Log.d(TAG, "适配器项目数: " + adapter.getItemCount());
-            Log.d(TAG, "数据列表大小: " + currentData.size());
-
-            for (int i = 0; i < Math.min(currentData.size(), 5); i++) {
-                ListItem item = currentData.get(i);
-                Log.d(TAG, "项目 " + i + ": " + getItemTypeName(item.getItemType()));
-            }
-            if (currentData.size() > 5) {
-                Log.d(TAG, "... 还有 " + (currentData.size() - 5) + " 个项目");
-            }
-            Log.d(TAG, "========================");
-        } else {
-            Log.e(TAG, "适配器为null");
-        }
-    }
-
-    /**
-     * 新增：获取项目类型名称，用于调试
-     */
-    private String getItemTypeName(int itemType) {
-        switch (itemType) {
-            case ListItem.TYPE_BANNER: return "BANNER";
-            case ListItem.TYPE_HORIZONTAL_CARD: return "HORIZONTAL_CARD";
-            case ListItem.TYPE_ONE_COLUMN: return "ONE_COLUMN";
-            case ListItem.TYPE_TWO_COLUMN: return "TWO_COLUMN";
-            default: return "UNKNOWN(" + itemType + ")";
-        }
-    }
-
-    /**
-     * 修正后的检查是否还有更多数据
-     */
-    private void checkNoMoreData(PagedData<ModuleConfig> pagedData) {
-        if (pagedData == null || isFinishing() || isDestroyed()) {
-            return;
-        }
-
-        try {
-            boolean noMoreData = false;
-
-            if (pagedData.getTotal() > 0 && currentData.size() >= pagedData.getTotal()) {
-                noMoreData = true;
-                Log.d(TAG, "已加载所有数据，当前: " + currentData.size() + ", 总数: " + pagedData.getTotal());
-            } else if (pagedData.getPages() > 0 && currentPage >= pagedData.getPages()) {
-                noMoreData = true;
-                Log.d(TAG, "已加载所有页面，当前页: " + currentPage + ", 总页数: " + pagedData.getPages());
-            }
-
-            // 使用更长的延迟确保状态稳定
-            if (noMoreData) {
-                mainHandler.postDelayed(() -> {
-                    if (!isFinishing() && !isDestroyed()) {
-                        setNoMoreData();
-                    }
-                }, 500); // 增加延迟时间
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "检查更多数据时发生错误", e);
-        }
-    }
-
-
-
-    /**
-     * 修正后的设置没有更多数据方法
+     * 辅助方法：设置没有更多数据
      */
     private void setNoMoreData() {
-        if (swipeRefreshLayout == null || isFinishing() || isDestroyed()) {
-            return;
-        }
-
-        try {
-            runOnUiThread(() -> {
-                if (swipeRefreshLayout == null || isFinishing() || isDestroyed()) {
-                    return;
-                }
-
-                // 确保刷新和加载状态都已完成再设置noMoreData
-                if (!swipeRefreshLayout.isRefreshing() && !swipeRefreshLayout.isLoading()) {
-                    swipeRefreshLayout.finishLoadMoreWithNoMoreData();
-                    Log.d(TAG, "设置无更多数据状态");
-                } else {
-                    // 如果还在刷新或加载中，延迟设置
-                    mainHandler.postDelayed(() -> setNoMoreData(), 300);
-                }
-            });
-        } catch (Exception e) {
-            Log.e(TAG, "设置无更多数据时发生错误", e);
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.finishLoadMoreWithNoMoreData();
         }
     }
 
-
     /**
-     * 修正后的完成刷新和加载更多方法 - 避免状态冲突
+     * 辅助方法：检查是否还有更多数据
      */
-    private void finishRefreshAndLoadMore() {
-        if (swipeRefreshLayout == null || isFinishing() || isDestroyed()) {
-            return;
-        }
-
-        try {
-            // 使用runOnUiThread确保在主线程执行
-            runOnUiThread(() -> {
-                if (swipeRefreshLayout == null || isFinishing() || isDestroyed()) {
-                    return;
-                }
-
-                // 分别检查和处理刷新状态
-                if (swipeRefreshLayout.isRefreshing()) {
-                    swipeRefreshLayout.finishRefresh(200, true, false); // 添加延迟参数
-                    Log.d(TAG, "完成下拉刷新");
-                }
-
-                // 分别检查和处理加载更多状态
-                if (swipeRefreshLayout.isLoading()) {
-                    swipeRefreshLayout.finishLoadMore(200, true, false); // 添加延迟参数，不触发noMoreData
-                    Log.d(TAG, "完成上拉加载");
-                }
-            });
-        } catch (Exception e) {
-            Log.e(TAG, "完成刷新状态时发生错误", e);
+    private void checkNoMoreData(PagedData<ModuleConfig> pagedData) {
+        if (pagedData.getCurrent() * pagedData.getSize() >= pagedData.getTotal()) {
+            setNoMoreData();
+        } else {
+            swipeRefreshLayout.setEnableLoadMore(true);
         }
     }
 
-
-
     /**
-     * 取消当前网络请求
+     * 辅助方法：取消当前网络请求
      */
     private void cancelCurrentRequest() {
         if (currentCall != null && !currentCall.isCanceled()) {
             currentCall.cancel();
-            currentCall = null;
-            Log.d(TAG, "已取消当前网络请求");
+            Log.d(TAG, "取消了之前的网络请求");
         }
     }
 
     /**
-     * 获取错误信息
-     */
-    private String getErrorMessage(Throwable t) {
-        if (t == null) {
-            return "未知错误";
-        }
-
-        String message = t.getMessage();
-        if (message == null || message.isEmpty()) {
-            return t.getClass().getSimpleName();
-        }
-
-        return message;
-    }
-
-    // ==================== 公共方法 ====================
-
-    /**
-     * 手动刷新数据
-     */
-    public void refreshData() {
-        Log.d(TAG, "手动刷新数据");
-        if (swipeRefreshLayout != null) {
-            swipeRefreshLayout.autoRefresh();
-        } else {
-            loadHomePageData(true);
-        }
-    }
-
-    /**
-     * 重置数据
-     */
-    public void resetData() {
-        Log.d(TAG, "重置数据");
-
-        currentData.clear();
-        currentPage = 1;
-        isLoading = false;
-
-        updateAdapter();
-
-        if (swipeRefreshLayout != null) {
-            swipeRefreshLayout.resetNoMoreData();
-        }
-    }
-
-    /**
-     * 显示错误信息
+     * 辅助方法：显示错误信息
      */
     private void showError(String message) {
-        Log.e(TAG, "显示错误: " + message);
-        showToast(message);
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
     /**
-     * 显示Toast消息
+     * 辅助方法：显示Toast
      */
     private void showToast(String message) {
-        if (message != null && !message.isEmpty()) {
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * 辅助方法：获取错误信息
+     */
+    private String getErrorMessage(Throwable t) {
+        if (t instanceof java.net.SocketTimeoutException) {
+            return "连接超时";
+        } else if (t instanceof java.net.UnknownHostException) {
+            return "无法连接到服务器，请检查网络";
+        } else if (t instanceof retrofit2.HttpException) {
+            return "HTTP错误: " + ((retrofit2.HttpException) t).code();
+        } else {
+            return t.getMessage() != null ? t.getMessage() : "未知错误";
         }
-    }
-
-    // ==================== 生命周期方法 ====================
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        Log.d(TAG, "Activity onResume");
-        // TODO: 后期可在此处添加数据刷新逻辑
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        Log.d(TAG, "Activity onPause");
-        // TODO: 后期可在此处添加暂停逻辑
     }
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
-        Log.d(TAG, "Activity onDestroy");
-
-        try {
-            // 取消网络请求
-            cancelCurrentRequest();
-
-            // 清理Handler
-            if (mainHandler != null) {
-                mainHandler.removeCallbacksAndMessages(null);
-                mainHandler = null;
-            }
-
-            // 清理数据
-            if (currentData != null) {
-                currentData.clear();
-            }
-
-            // 清理适配器
-            if (adapter != null) {
-                // TODO: 后期实现adapter的cleanup方法
-                adapter = null;
-            }
-
-            Log.d(TAG, "Activity资源清理完成");
-
-        } catch (Exception e) {
-            Log.e(TAG, "Activity销毁时清理资源失败", e);
+        if (bottomMusicPlayerView != null) {
+            bottomMusicPlayerView.unbindMusicService();
         }
+        cancelCurrentRequest();
+        if (mainHandler != null) {
+            mainHandler.removeCallbacksAndMessages(null);
+        }
+        super.onDestroy();
+        Log.d(TAG, "Activity销毁");
     }
 
+    /**
+     * 实现 OnMusicItemClickListener 接口
+     * 当音乐项被点击时调用
+     * @param musicInfo 被点击的音乐信息
+     * @param position 被点击的音乐在列表中的位置
+     */
     @Override
-    public void onBackPressed() {
-        // TODO: 后期可添加退出确认逻辑
-        super.onBackPressed();
+    public void onItemClick(MusicInfo musicInfo, int position) {
+        Log.d(TAG, "点击了音乐: " + musicInfo.getMusicName() + ", 位置: " + position);
+        // 将点击的音乐添加到播放列表的开头并设置为当前播放
+        MusicManager.getInstance(this).addAndReorderPlaylist(musicInfo);
+
+        // 启动音乐播放Activity
+        Intent intent = new Intent(this, MusicPlayerActivity.class);
+        startActivity(intent);
+
+        // 修正1：添加歌时判断BottomMusicPlayerView显示
+        checkAndUpdateBottomPlayerVisibility();
     }
 
     @Override
     public void onPlayButtonClick(MusicInfo musicInfo, int position) {
-        // 处理播放按钮点击事件，启动MusicPlayerActivity
-        musicInfo.printDetailedInfo();
-        Log.d(TAG, "播放添加按钮点击: " + musicInfo.getMusicName() + ", 位置: " + position);
+        Log.d(TAG, "点击了播放按钮: " + musicInfo.getMusicName() + ", 位置: " + position);
+        // 将点击的音乐添加到播放列表的开头并设置为当前播放
+        MusicManager.getInstance(this).addToPlaylist(musicInfo);
 
-
-        // 启动MusicPlayerActivity并传递当前音乐信息
-//        startMusicPlayerActivityWithMusic(musicInfo);
-        MusicManager musicManager = MusicManager.getInstance();
-        musicManager.addToPlaylist(musicInfo);
-
-        Toast.makeText(this, musicInfo.getMusicName()+"已添加到播放列表", Toast.LENGTH_SHORT).show();
-
-    }
-
-    @Override
-    public void onItemClick(MusicInfo musicInfo, int position) {
-        // 处理整个item点击事件，启动MusicPlayerActivity
-        musicInfo.printDetailedInfo();
-        Log.d(TAG, "Item点击: " + musicInfo.getMusicName() + ", 位置: " + position);
-
-        // 启动MusicPlayerActivity并传递当前音乐信息
-        startMusicPlayerActivityWithMusic(musicInfo);
+        // 修正1：添加歌时判断BottomMusicPlayerView显示
+        checkAndUpdateBottomPlayerVisibility();
     }
 
     /**
-     * 启动音乐播放页面并传递音乐信息
-     * @param musicInfo 要播放的音乐信息
+     * 修正1：初始化底部播放器ViewStub，但不立即inflate
      */
-    private void startMusicPlayerActivityWithMusic(MusicInfo musicInfo) {
-        Intent intent = new Intent(this, MusicPlayerActivity.class);
+    private void initBottomMusicPlayerStub() {
+        try {
+            if (stubBottomPlayer == null) {
+                Log.e(TAG, "ViewStub未找到");
+                return;
+            }
 
-        // 方法1：直接通过Intent传递Parcelable对象（推荐）
-        intent.putExtra("MUSIC_INFO", musicInfo);
+            // 不立即inflate，等需要显示时再inflate
+            isBottomPlayerInflated = false;
+            Log.d(TAG, "底部播放器ViewStub初始化成功");
 
-        // 方法2：使用Bundle包装数据（如果需要传递更多参数）
-        Bundle bundle = new Bundle();
-        bundle.putParcelable("MUSIC_INFO", musicInfo);
-        bundle.putString("SOURCE_ACTIVITY", "MainActivity"); // 可选：标识来源
-        bundle.putLong("CLICK_TIME", System.currentTimeMillis()); // 可选：点击时间戳
-        intent.putExtras(bundle);
-
-        startActivity(intent);
-        Log.d(TAG, "已启动MusicPlayerActivity，传递音乐: " + musicInfo.getMusicName());
+        } catch (Exception e) {
+            Log.e(TAG, "底部播放器ViewStub初始化失败", e);
+        }
     }
 
+    /**
+     * 修正1和修正2：检查并更新底部播放器的显示状态
+     * 根据当前播放状态决定是否显示BottomMusicPlayerView
+     */
+    private void checkAndUpdateBottomPlayerVisibility() {
+        try {
+            MusicManager musicManager = MusicManager.getInstance(this);
 
+            // 检查播放列表是否为空
+            boolean hasPlaylist = musicManager.hasPlaylist();
+
+            Log.d(TAG, "检查播放器显示状态 - hasPlaylist: " + hasPlaylist +
+                    ", isInflated: " + isBottomPlayerInflated);
+
+            if (hasPlaylist) {
+                // 有播放列表，需要显示底部播放器
+                if (!isBottomPlayerInflated) {
+                    // ViewStub还没有inflate，现在inflate
+                    inflateBottomMusicPlayer();
+                } else if (bottomMusicPlayerView != null) {
+                    // 已经inflate，只需要更新视图并确保可见
+                    bottomMusicPlayerView.setVisibility(View.VISIBLE);
+                    bottomMusicPlayerView.updatePlayerView();
+                }
+            } else {
+                // 修正1：空列表时保持BottomMusicPlayerView不显示
+                if (isBottomPlayerInflated && bottomMusicPlayerView != null) {
+                    bottomMusicPlayerView.setVisibility(View.GONE);
+                }
+            }
+
+        } catch (Exception e) {
+            Log.e(TAG, "检查底部播放器显示状态时出错", e);
+        }
+    }
+
+    /**
+     * inflate底部播放器ViewStub
+     */
+    private void inflateBottomMusicPlayer() {
+        try {
+            if (stubBottomPlayer != null && !isBottomPlayerInflated) {
+                // inflate ViewStub
+                View inflatedView = stubBottomPlayer.inflate();
+                bottomMusicPlayerView = findViewById(R.id.bottom_music_player);
+                isBottomPlayerInflated = true;
+
+                if (bottomMusicPlayerView != null) {
+                    // 更新播放器状态
+                    bottomMusicPlayerView.updatePlayerView();
+                    bottomMusicPlayerView.setVisibility(View.VISIBLE);
+                    Log.d(TAG, "底部播放器inflate并显示成功");
+                } else {
+                    Log.e(TAG, "底部播放器inflate后仍然为null");
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "inflate底部播放器失败", e);
+        }
+    }
 }

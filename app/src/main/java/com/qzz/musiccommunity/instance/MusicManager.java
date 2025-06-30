@@ -1,7 +1,9 @@
 package com.qzz.musiccommunity.instance;
 
+import android.content.Context;
 import android.util.Log;
 
+import com.qzz.musiccommunity.database.MusicDao;
 import com.qzz.musiccommunity.database.dto.MusicInfo;
 import com.qzz.musiccommunity.model.BannerItem;
 import com.qzz.musiccommunity.model.HorizontalCardItem;
@@ -16,26 +18,44 @@ public class MusicManager {
 
     // 单例实例
     private static volatile MusicManager instance;
+    private MusicDao musicDao;
 
     // 音乐列表数据
     private List<MusicInfo> currentPlaylist = new ArrayList<>();
     private int currentPosition = 0;
 
     // 私有构造函数防止外部实例化
-    private MusicManager() {}
+    private MusicManager(Context context) {
+        musicDao =  MusicDao.getInstance(context.getApplicationContext());
+        // 初始化时从本地缓存加载播放列表
+        currentPlaylist = musicDao.loadPlaylist();
+        Log.d(TAG, "MusicManager 单例已创建，并从本地加载 " + currentPlaylist.size() + " 首歌曲");
+    }
 
     // 获取单例实例的方法
-    public static MusicManager getInstance() {
+    public static MusicManager getInstance(Context context) {
         if (instance == null) {
             synchronized (MusicManager.class) {
                 if (instance == null) {
-                    instance = new MusicManager();
-                    Log.d(TAG, "MusicManager 单例已创建");
+                    instance = new MusicManager(context);
                 }
             }
         }
         return instance;
     }
+
+    // 无参数的getInstance方法（用于后续调用）
+    public static MusicManager getInstance() {
+        if (instance == null) {
+            throw new IllegalStateException("MusicManager未初始化！请先调用getInstance(Context)");
+        }
+        return instance;
+    }
+    // 添加一个检查是否已初始化的方法
+    public static boolean isInitialized() {
+        return instance != null;
+    }
+
 
     // 设置当前播放列表
     public void setPlaylist(List<MusicInfo> playlist) {
@@ -45,6 +65,7 @@ public class MusicManager {
             currentPlaylist = new ArrayList<>(playlist);
         }
         currentPosition = 0; // 重置播放位置
+        musicDao.savePlaylist(currentPlaylist); // 更新本地缓存
         Log.d(TAG, "已更新播放列表，共 " + currentPlaylist.size() + " 首歌曲");
     }
 
@@ -86,6 +107,7 @@ public class MusicManager {
             currentPlaylist.add(musicInfo);
             Log.d(TAG, "添加新歌曲到末尾: " + musicInfo.getMusicName());
         }
+        musicDao.savePlaylist(currentPlaylist); // 更新本地缓存
     }
 
     /**
@@ -114,7 +136,7 @@ public class MusicManager {
 
         // 设置当前播放位置为0（新添加的歌曲）
         currentPosition = 0;
-
+        musicDao.savePlaylist(currentPlaylist); // 更新本地缓存
         Log.d(TAG, "播放列表重新排列完成，当前播放: " + newMusic.getMusicName() + "，列表总数: " + currentPlaylist.size());
     }
 
@@ -147,12 +169,18 @@ public class MusicManager {
             }
             // 如果当前位置仍在有效范围内，保持不变
         }
-
+        musicDao.savePlaylist(currentPlaylist); // 更新本地缓存
         Log.d(TAG, "删除歌曲: " + removedMusic.getMusicName() +
                 ", 新的播放位置: " + currentPosition +
                 ", 剩余歌曲数: " + currentPlaylist.size());
 
         return true;
+    }
+
+    // 在MusicManager类中添加此方法
+    public boolean hasPlaylist() {
+        // 根据您的实现返回是否有播放列表
+        return currentPlaylist != null && !currentPlaylist.isEmpty();
     }
 
     /**
@@ -179,6 +207,7 @@ public class MusicManager {
     public void clearPlaylist() {
         currentPlaylist.clear();
         currentPosition = 0;
+        musicDao.savePlaylist(currentPlaylist); // 更新本地缓存
         Log.d(TAG, "播放列表已清空");
     }
 
@@ -272,3 +301,5 @@ public class MusicManager {
         Log.d(TAG, "已从列表项收集 " + allMusic.size() + " 首歌曲");
     }
 }
+
+
